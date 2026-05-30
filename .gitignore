@@ -7,3 +7,5 @@ dist/
 
 # Raw source data (large, pulled from S3; bundled JSON is generated)
 data/emdat.csv
+dist/
+*.tsbuildinfo
