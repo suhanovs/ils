@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+.env.local
+
+# Raw source data (large, pulled from S3; bundled JSON is generated)
+data/emdat.csv
