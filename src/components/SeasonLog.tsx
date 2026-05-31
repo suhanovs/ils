@@ -55,15 +55,24 @@ export function SeasonLog({ result, initialCapital }: Props) {
             const equityUp    = s.equity > startEquity
             const isIbnr      = s.deals.some(d => d.status === 'ibnr')
 
-            // Format each event as "Name (yr) FL:45% TX:35% MS:20%"
-            const eventStrings = s.events.map(ev => {
+            const eventItems = s.events.map((ev, idx) => {
               const name = ev.name ? `${ev.name} (${ev.year})` : `TC-${ev.year}`
               const states = ev.stateSplits
                 .filter(sp => sp.weight > 0.02)  // skip <2% contributions
                 .sort((a, b) => b.weight - a.weight)
                 .map(sp => `${sp.state}:${(sp.weight * 100).toFixed(0)}%`)
                 .join(' ')
-              return `${name} ${states}`
+              // EM-DAT bundle does not include explicit category;
+              // use a severe-loss proxy for Cat 4/5 highlighting.
+              const isCat45Proxy = ev.industryLossMusd >= 30000
+              return (
+                <span
+                  key={`${s.season}-${idx}-${name}`}
+                  className={`inline-block px-1 py-0.5 rounded ${isCat45Proxy ? 'event-major' : 'event-normal'}`}
+                >
+                  {name} {states}
+                </span>
+              )
             })
 
             return (
@@ -119,9 +128,9 @@ export function SeasonLog({ result, initialCapital }: Props) {
 
                 {/* Events */}
                 <td className="px-1.5 py-0.5 font-mono min-w-[180px]">
-                  {eventStrings.length > 0 ? (
-                    <span className="text-red-300">
-                      {eventStrings.join('  ·  ')}
+                  {eventItems.length > 0 ? (
+                    <span className="flex flex-wrap gap-1">
+                      {eventItems}
                     </span>
                   ) : (
                     <span className="text-slate-600 italic">quiet</span>

@@ -21,6 +21,7 @@ export default function App() {
   const [config, setConfig]               = useState<SimConfig>(DEFAULT_CONFIG)
   const [compareNoTrap,   setNoTrap]      = useState(false)
   const [logScale,        setLogScale]    = useState(false)
+  const [lightMode,       setLightMode]   = useState(false)
 
   const emdatPool = useMemo(() => bundle.events, [])
   const { state, runSingle, runMC, setMode } = useSimulation(emdatPool)
@@ -47,7 +48,7 @@ export default function App() {
   const bottomH = (isSingle && hasResult) ? GRID_H + LOG_H + 8 : 0
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className={`flex flex-col h-screen overflow-hidden ${lightMode ? 'light' : ''}`}>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="flex items-center gap-3 px-4 py-2 bg-slate-900 border-b border-slate-700 flex-shrink-0">
@@ -66,6 +67,16 @@ export default function App() {
           onClick={isSingle ? handleRunSingle : handleRunMC}>
           {state.running ? 'Running…' : '▶  Run'}
         </button>
+
+        <label className="flex items-center gap-1 text-xs ml-1 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            className="w-3 h-3 accent-blue-500"
+            checked={lightMode}
+            onChange={e => setLightMode(e.target.checked)}
+          />
+          <span className="text-slate-300">Light</span>
+        </label>
 
         {state.running && (
           <div className="flex items-center gap-2 text-xs text-slate-400">
