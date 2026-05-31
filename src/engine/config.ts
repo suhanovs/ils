@@ -219,18 +219,18 @@ export const DEFAULT_CONFIG: SimConfig = {
     juniorAttachJitter: 0.05,
   },
   pricing: {
-    // Junior 1.25× × EL 15% = 18.75% ROL at soft-market entry.
-    // After a bad season the cycle pushes toward 3.5× = 52.5% (hard market cap).
+    // Junior 1.25x x EL 40% = 50% ROL at soft-market entry.
+    // Guardrails cap junior ROL at 60% even in hard markets.
     initMultiple: { junior: 1.25, mid: 1.75, remote: 5.5 },
-    corridorJunior: [1.5, 3.5],
-    corridorMid:    [2.5, 5.5],
+    corridorJunior: [1.25, 1.50],
+    corridorMid:    [1.75, 3.00],
     corridorRemote: [3.5, 9.0],
-    // Higher sensitivity + lower norm = responsive hardening on moderate losses.
-    cycleSensitivity: 1.0,
-    cycleNormBn: 25,
+    // Reduced hardening slope to avoid runaway ROL after clustered years.
+    cycleSensitivity: 0.55,
+    cycleNormBn: 35,
     // Faster softening: market normalises in ~4–5 quiet years.
-    decayFactor: 0.75,
-    elLolJunior: 0.15,   // 15% → ROL 22–52% depending on multiple
+    decayFactor: 0.70,
+    elLolJunior: 0.40,   // 40% -> ~50-60% ROL under new guardrails
     elLolMid:    0.06,   // 6%  → ROL 15–33%
     elLolRemote: 0.02,   // 2%  (reference only; remote layers are not written)
     // Keep EL static by default; cycle effects come from multiples.

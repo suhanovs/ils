@@ -114,7 +114,7 @@ function makeLayer(
   const [multMin, multMax] = tierCorridor(tier, prCfg)
   const rawMultiple = market.multiple[tier]
   const multiple    = Math.min(multMax, Math.max(multMin, rawMultiple))
-  const rol         = Math.min(0.80, elLol * multiple)   // hard cap at 80% ROL
+  const rol         = Math.min(rolCapForTier(tier), elLol * multiple)
 
   return {
     id,
@@ -135,6 +135,14 @@ function tierCorridor(tier: LayerTier, prCfg: PricingConfig): [number, number] {
     case 'junior': return prCfg.corridorJunior
     case 'mid':    return prCfg.corridorMid
     case 'remote': return prCfg.corridorRemote
+  }
+}
+
+function rolCapForTier(tier: LayerTier): number {
+  switch (tier) {
+    case 'junior': return 0.60
+    case 'mid':    return 0.35
+    case 'remote': return 0.20
   }
 }
 
