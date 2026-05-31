@@ -79,7 +79,6 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
   const pr  = config.pricing
   const po  = config.portfolio
   const ca  = config.capital
-  const rc  = config.recycling
   const sim = config.simulation
 
   return (
@@ -107,9 +106,21 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
 
       {/* ── CAPITAL ── */}
       <Section title="Capital" color="emerald">
-        <Row label="Initial capital ($M)">
+        <Row label="Starting net worth ($M)">
           <NumInput value={ca.initialCapitalMusd} min={0.1} step={0.5} disabled={d}
             onChange={(v) => onChange({ capital: { ...ca, initialCapitalMusd: v } })} />
+        </Row>
+        <Row label="Deploy share %">
+          <NumInput value={ca.deploymentFraction * 100} min={0} max={100} step={5} disabled={d}
+            onChange={(v) => onChange({ capital: { ...ca, deploymentFraction: v / 100 } })} />
+        </Row>
+        <Row label="Deploy after ruin">
+          <input type="checkbox" className="w-4 h-4 accent-blue-500" checked={ca.deployAfterRuin} disabled={d}
+            onChange={(e) => onChange({ capital: { ...ca, deployAfterRuin: e.target.checked } })} />
+        </Row>
+        <Row label="Keep ILS balanced">
+          <input type="checkbox" className="w-4 h-4 accent-blue-500" checked={ca.keepIlsBalanced} disabled={d}
+            onChange={(e) => onChange({ capital: { ...ca, keepIlsBalanced: e.target.checked } })} />
         </Row>
         <Row label="Risk-free / collateral %">
           <NumInput value={ca.riskFreeRate * 100} min={0} max={15} step={0.1} disabled={d}
@@ -122,21 +133,6 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
           <NumInput value={ca.trappingPeriodSeasons} min={1} max={5} step={1} disabled={d}
             onChange={(v) => onChange({ capital: { ...ca, trappingPeriodSeasons: v } })} />
         </Row>
-      </Section>
-
-      {/* ── RECYCLING ── */}
-      <Section title="Recycling" color="emerald">
-        <Row label="Mode">
-          <SelectInput value={rc.mode} disabled={d}
-            options={[{ val: 'full', label: 'Full' }, { val: 'partial', label: 'Partial' }]}
-            onChange={(v) => onChange({ recycling: { ...rc, mode: v } })} />
-        </Row>
-        {rc.mode === 'partial' && (
-          <Row label="Redeployment %">
-            <NumInput value={rc.redeploymentFraction * 100} min={10} max={100} step={5} disabled={d}
-              onChange={(v) => onChange({ recycling: { ...rc, redeploymentFraction: v / 100 } })} />
-          </Row>
-        )}
       </Section>
 
       {/* ── FREQUENCY ── */}

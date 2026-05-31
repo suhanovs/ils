@@ -111,8 +111,14 @@ export interface PortfolioConfig {
 // ── Capital & cashflow ────────────────────────────────────────────────────
 
 export interface CapitalConfig {
-  /** Investor starting wealth, USD millions */
+  /** Investor starting net worth, USD millions */
   initialCapitalMusd: number
+  /** Target share of total net worth allocated to ILS each season */
+  deploymentFraction: number
+  /** After ILS ruin threshold breach, continue redeploying target share */
+  deployAfterRuin: boolean
+  /** Harvest/transfer to keep ILS share near deploymentFraction */
+  keepIlsBalanced: boolean
   /**
    * Risk-free rate: earned on uninvested cash AND on full collateral in trust.
    * (Collateral is invested in T-bills at the risk-free rate; interest flows
@@ -230,6 +236,9 @@ export const DEFAULT_CONFIG: SimConfig = {
   },
   capital: {
     initialCapitalMusd: 1,
+    deploymentFraction: 0.35,
+    deployAfterRuin: true,
+    keepIlsBalanced: true,
     // Single rate: risk-free rate = collateral yield = interest on T-bill trust.
     riskFreeRate: 0.045,
     trappingPeriodSeasons: 3,

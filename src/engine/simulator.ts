@@ -30,7 +30,6 @@ import type { PricingState } from './pricingCycle'
 import { buildEventPool, computeSeasonTowerLosses } from './eventLoss'
 import { buildPortfolio } from './portfolio'
 import { settleSeason, processTrappedPositions, computeLiquidReturn } from './cashflow'
-import { decideDeployment } from './recycling'
 import type { SimConfig } from './config'
 import type {
   Cedent, Layer, SeasonRecord, TrappedPosition,
@@ -51,13 +50,17 @@ export function runPath(
   const pool  = buildEventPool(emdatPool)
 
   // Initial state
-  // We track liquid wealth and trapped separately; equity = liquid + trapped.
-  let liquidWealth:    number            = cfg.capital.initialCapitalMusd
+  // We track investor net worth in two buckets:
+  //  - safeWealth: not in ILS, cannot lose cat risk, earns RFR
+  //  - ilsLiquid + trapped: ILS capital at risk / in development trap
+  let safeWealth = cfg.capital.initialCapitalMusd * (1 - cfg.capital.deploymentFraction)
+  let ilsLiquid  = cfg.capital.initialCapitalMusd * cfg.capital.deploymentFraction
   let trapped:         TrappedPosition[] = []
   let pricingState:    PricingState      = initPricingState(cfg.pricing)
   let coxState:        CoxState          = 1   // start Neutral
   let prevSeasonLossMusd                = 0
-  let equity                             = liquidWealth  // for ruin check
+  let equity                             = safeWealth + ilsLiquid // for ruin check
+  let ilsRuined                          = false
 
   const ruinThreshold  = cfg.capital.initialCapitalMusd * cfg.simulation.ruinThresholdFraction
   const seasons:       SeasonRecord[] = []
@@ -70,15 +73,32 @@ export function runPath(
   }
 
   for (let s = 1; s <= cfg.simulation.nSeasons; s++) {
-    // ── 1. Release matured traps → add to liquid ─────────────────────────
+    // ── 1. Release matured traps → add to ILS liquid ─────────────────────
     const { released, stillTrapped } = processTrappedPositions(trapped, s, cfg.capital)
     trapped       = stillTrapped
-    liquidWealth += released   // matured collateral flows back to liquid
+    ilsLiquid += released
 
-    // ── 2. Decide deployment from current liquid wealth ───────────────────
-    const { availableCapital, cashKept } = decideDeployment(liquidWealth, trapped, cfg.recycling)
+    // ── 2. Rebalance target ILS allocation from total net worth ───────────
+    const trappedValue = trapped.reduce((a, p) => a + p.amountMusd, 0)
+    const ilsEquityStart = ilsLiquid + trappedValue
+    const totalNetWorth = safeWealth + ilsEquityStart
+    const canDeploy = cfg.capital.deployAfterRuin || !ilsRuined
+    const targetIlsEquity = canDeploy ? totalNetWorth * cfg.capital.deploymentFraction : 0
 
-    // ── 3. Build towers for this season ───────────────────────────────────
+    if (ilsEquityStart < targetIlsEquity) {
+      const topUp = Math.min(safeWealth, targetIlsEquity - ilsEquityStart)
+      safeWealth -= topUp
+      ilsLiquid += topUp
+    } else if (cfg.capital.keepIlsBalanced && ilsEquityStart > targetIlsEquity) {
+      const harvest = Math.min(ilsLiquid, ilsEquityStart - targetIlsEquity)
+      ilsLiquid -= harvest
+      safeWealth += harvest
+    }
+
+    // ── 3. Deploy all current ILS liquid into seasonal deals ───────────────
+    const availableCapital = Math.max(0, ilsLiquid)
+
+    // ── 4. Build towers for this season ───────────────────────────────────
     const marketState = {
       multiple: { ...pricingState.multiple },
       elLol: { ...pricingState.elLol },
@@ -95,18 +115,20 @@ export function runPath(
       allLayers.push(...tower)
     }
 
-    // ── 4. Build portfolio ─────────────────────────────────────────────────
+    // ── 5. Build portfolio ─────────────────────────────────────────────────
     const deals = buildPortfolio(rng, allLayers, availableCapital, cfg)
     if (deals.length === 0) {
-      // No capital to deploy — just hold cash
-      liquidWealth = liquidWealth * (1 + cfg.capital.riskFreeRate)
-      const trappedValue = trapped.reduce((a, p) => a + p.amountMusd, 0)
-      equity = liquidWealth + trappedValue
+      // No deals written: park ILS liquid into safe bucket for the season.
+      safeWealth += ilsLiquid
+      ilsLiquid = 0
+      safeWealth *= (1 + cfg.capital.riskFreeRate)
+      const trappedValueNow = trapped.reduce((a, p) => a + p.amountMusd, 0)
+      equity = safeWealth + trappedValueNow
       seasons.push(emptySeasonRecord(s, equity, pricingState))
       continue
     }
 
-    // ── 5–7. Events ────────────────────────────────────────────────────────
+    // ── 6–8. Events ────────────────────────────────────────────────────────
     const { count: eventCount, nextCoxState } = drawEventCount(rng, cfg.frequency, coxState)
     coxState = nextCoxState
 
@@ -134,19 +156,21 @@ export function runPath(
       }
     }
 
-    // ── 8. Settle deals ────────────────────────────────────────────────────
+    // ── 9. Settle deals ────────────────────────────────────────────────────
     const settlement = settleSeason(deals, layerLossFractions, ibnrDealIds, s, cfg.capital)
     trapped.push(...settlement.newTrappedPositions)
 
-    // ── 9. Compute equity = liquid + trapped ───────────────────────────────
-    //   liquid  = cash kept (earns risk-free) + immediate returns + already-released traps
-    //             Note: `released` was already added to liquidWealth in step 1,
-    //             so here we only process the new season's cashflows.
-    liquidWealth  = computeLiquidReturn(cashKept, settlement, 0, cfg.capital.riskFreeRate)
-    const trappedValue = trapped.reduce((a, p) => a + p.amountMusd, 0)
-    equity        = liquidWealth + trappedValue
+    // ── 10. Compute end-of-season buckets and equity ───────────────────────
+    // ILS liquid = only clean-deal returns; partial/IBNR remain trapped.
+    ilsLiquid = computeLiquidReturn(0, settlement, 0, cfg.capital.riskFreeRate)
+    safeWealth *= (1 + cfg.capital.riskFreeRate)
+    const trappedValueNow = trapped.reduce((a, p) => a + p.amountMusd, 0)
+    const ilsEquityEnd = ilsLiquid + trappedValueNow
+    equity = safeWealth + ilsEquityEnd
 
-    // ── 9b. Advance pricing cycle (AFTER recording the season's rates) ────
+    if (ilsEquityEnd <= ruinThreshold) ilsRuined = true
+
+    // ── 10b. Advance pricing cycle (AFTER recording the season's rates) ───
     // The multiple used THIS season is captured now; the updated multiple
     // is what cedents and investors will see NEXT season.
     const seasonLossMusd = events.reduce((sum, ev) => sum + ev.industryLossMusd, 0)
@@ -175,7 +199,7 @@ export function runPath(
     advancePricingState(pricingState, seasonLossMusd, prevSeasonLossMusd, hitStates, cfg.pricing)
     prevSeasonLossMusd = seasonLossMusd
 
-    // ── 10. Record ────────────────────────────────────────────────────────
+    // ── 11. Record ────────────────────────────────────────────────────────
     const record: SeasonRecord = {
       season:         s,
       equity:         Math.max(0, equity),
@@ -194,7 +218,7 @@ export function runPath(
     }
     seasons.push(record)
 
-    // ── 11. Ruin check ────────────────────────────────────────────────────
+    // ── 12. Ruin check (total net worth) ──────────────────────────────────
     if (equity <= ruinThreshold) {
       // Fill remaining seasons as 0 equity (ruined)
       for (let r = s + 1; r <= cfg.simulation.nSeasons; r++) {

@@ -81,7 +81,7 @@ function MCStats({ result, config }: { result: MCResult; config: SimConfig }) {
       <Stat label="Sharpe (median)" value={fmtN(result.sharpe)}
         color={result.sharpe > 1.3 ? 'text-emerald-400' : result.sharpe > 0.8 ? 'text-amber-400' : 'text-red-400'}
         sub="per-path" />
-      <Stat label="Initial capital" value={fmtM(config.capital.initialCapitalMusd)} />
+      <Stat label="Starting net worth" value={fmtM(config.capital.initialCapitalMusd)} />
     </div>
   )
 }
