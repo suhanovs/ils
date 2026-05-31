@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { DEFAULT_CONFIG } from './engine/config'
 import type { SimConfig } from './engine/config'
 import { useSimulation } from './hooks/useSimulation'
@@ -24,6 +24,7 @@ export default function App() {
 
   const emdatPool = useMemo(() => bundle.events, [])
   const { state, runSingle, runMC, setMode } = useSimulation(emdatPool)
+  const didAutoRunRef = useRef(false)
 
   const handleConfigChange = useCallback((patch: Partial<SimConfig>) => {
     setConfig(c => ({ ...c, ...patch }))
@@ -31,6 +32,13 @@ export default function App() {
 
   const handleRunSingle = () => { setMode('single'); runSingle(config, compareNoTrap) }
   const handleRunMC     = () => { setMode('mc');     runMC(config) }
+
+  useEffect(() => {
+    if (didAutoRunRef.current) return
+    didAutoRunRef.current = true
+    setMode('single')
+    runSingle(DEFAULT_CONFIG, false)
+  }, [runSingle, setMode])
 
   const isSingle   = state.mode === 'single'
   const hasResult  = isSingle ? !!state.singleResult : !!state.mcResult
@@ -44,8 +52,7 @@ export default function App() {
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="flex items-center gap-3 px-4 py-2 bg-slate-900 border-b border-slate-700 flex-shrink-0">
         <div className="flex-shrink-0">
-          <h1 className="text-sm font-bold text-blue-400 tracking-wide uppercase">ILS Investor 101</h1>
-          <p className="text-xs text-slate-500">Collateralized Reinsurance</p>
+          <h1 className="text-sm font-bold text-blue-400 tracking-wide uppercase">ILS Simulator</h1>
         </div>
 
         <div className="flex items-center gap-1 ml-3">
@@ -59,6 +66,25 @@ export default function App() {
           onClick={isSingle ? handleRunSingle : handleRunMC}>
           {state.running ? 'Running…' : '▶  Run'}
         </button>
+
+        <div className="flex items-center gap-2 text-xs">
+          <a
+            href="https://github.com/suhanovs/ils#readme"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-400 hover:text-blue-300"
+          >
+            Readme
+          </a>
+          <a
+            href="https://github.com/suhanovs/ils"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-400 hover:text-blue-300"
+          >
+            Source
+          </a>
+        </div>
 
         {state.running && (
           <div className="flex items-center gap-2 text-xs text-slate-400">
