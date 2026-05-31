@@ -57,7 +57,7 @@ export function SeasonLog({ result, initialCapital }: Props) {
 
             // Format each event as "Name (yr) FL:45% TX:35% MS:20%"
             const eventStrings = s.events.map(ev => {
-              const name = ev.name ? `${ev.name}` : `TC-${ev.year}`
+              const name = ev.name ? `${ev.name} (${ev.year})` : `TC-${ev.year}`
               const states = ev.stateSplits
                 .filter(sp => sp.weight > 0.02)  // skip <2% contributions
                 .sort((a, b) => b.weight - a.weight)
