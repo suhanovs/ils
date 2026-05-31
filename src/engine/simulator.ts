@@ -178,21 +178,9 @@ export function runPath(
     const writtenMultiple = { ...pricingState.multiple }
     const writtenElLol    = { ...pricingState.elLol }
     const hitStates = new Set<State>()
-    const stateLossBySeason = new Map<State, number>()
     for (const ev of events) {
       for (const split of ev.stateSplits) {
-        if (split.weight <= 0) continue
-        const prev = stateLossBySeason.get(split.state) ?? 0
-        stateLossBySeason.set(split.state, prev + ev.industryLossMusd * split.weight)
-      }
-    }
-
-    // Only material state damage should influence EL/ROL regime updates.
-    // Rule: season state loss must reach at least 10% of that state's PML_100.
-    for (const [state, lossMusd] of stateLossBySeason.entries()) {
-      const pml100 = cfg.severity.statePML100Musd[state]
-      if (pml100 > 0 && lossMusd / pml100 >= 0.10) {
-        hitStates.add(state)
+        if (split.weight > 0) hitStates.add(split.state)
       }
     }
 
