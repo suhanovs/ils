@@ -233,7 +233,8 @@ export const DEFAULT_CONFIG: SimConfig = {
     elLolJunior: 0.15,   // 15% → ROL 22–52% depending on multiple
     elLolMid:    0.06,   // 6%  → ROL 15–33%
     elLolRemote: 0.02,   // 2%  (reference only; remote layers are not written)
-    elDriftPerHit: 0.003,
+    // Keep EL static by default; cycle effects come from multiples.
+    elDriftPerHit: 0.0,
   },
   portfolio: {
     nDealsRange: [8, 14],

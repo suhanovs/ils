@@ -56,6 +56,7 @@ export function runPath(
   let trapped:         TrappedPosition[] = []
   let pricingState:    PricingState      = initPricingState(cfg.pricing)
   let coxState:        CoxState          = 1   // start Neutral
+  let prevSeasonLossMusd                = 0
   let equity                             = liquidWealth  // for ruin check
 
   const ruinThreshold  = cfg.capital.initialCapitalMusd * cfg.simulation.ruinThresholdFraction
@@ -147,7 +148,8 @@ export function runPath(
     // Snapshot rates BEFORE advancing — these are what was actually written
     const writtenMultiple = { ...pricingState.multiple }
     const writtenElLol    = { ...pricingState.elLol }
-    advancePricingState(pricingState, seasonLossMusd, cfg.pricing)
+    advancePricingState(pricingState, seasonLossMusd, prevSeasonLossMusd, cfg.pricing)
+    prevSeasonLossMusd = seasonLossMusd
 
     // ── 10. Record ────────────────────────────────────────────────────────
     const record: SeasonRecord = {

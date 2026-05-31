@@ -10,9 +10,10 @@
  *   EL_lol = EL_dollar / limit  ("loss-on-line")
  *   Multiple = ROL / EL_lol
  *
- *   After a season with aggregate insured TC loss L (USD billions):
- *     Δ_multiple = cycleSensitivity × ln(1 + L / cycleNormBn)
- *     multiple_next = clamp(multiple_curr + Δ_multiple, corridor)
+ *   After a season with aggregate insured TC loss L_t (USD billions):
+ *     if L_t > L_{t-1}, then harden on the increase only:
+ *       Δ_multiple = cycleSensitivity × ln(1 + (L_t - L_{t-1}) / cycleNormBn)
+ *       multiple_next = clamp(multiple_curr + Δ_multiple, corridor)
  *
  *   Quiet year:
  *     multiple_next = baseMultiple + (multiple_curr − baseMultiple) × decayFactor
@@ -69,22 +70,27 @@ export function initPricingState(cfg: PricingConfig): PricingState {
 export function advancePricingState(
   state:          PricingState,
   seasonLossMusd: number,
+  prevSeasonLossMusd: number,
   cfg:            PricingConfig
 ): PricingState {
-  const lossGb = seasonLossMusd / 1000 // millions → billions
+  const lossGb = seasonLossMusd / 1000 // millions -> billions
+  const prevGb = prevSeasonLossMusd / 1000
+  const deltaGb = Math.max(0, lossGb - prevGb)
 
-  if (lossGb > 0.5) {
-    // === Loss season: harden multiples ===
-    const delta = cfg.cycleSensitivity * Math.log(1 + lossGb / cfg.cycleNormBn)
+  if (deltaGb > 0) {
+    // === Worsening season: harden multiples on incremental loss only ===
+    const delta = cfg.cycleSensitivity * Math.log(1 + deltaGb / cfg.cycleNormBn)
 
     state.multiple.junior  = clamp(state.multiple.junior  + delta, cfg.corridorJunior)
     state.multiple.mid     = clamp(state.multiple.mid     + delta, cfg.corridorMid)
     state.multiple.remote  = clamp(state.multiple.remote  + delta, cfg.corridorRemote)
 
-    // EL permanent drift upward (climate ratchet)
-    state.elLol.junior *= (1 + cfg.elDriftPerHit)
-    state.elLol.mid    *= (1 + cfg.elDriftPerHit)
-    state.elLol.remote *= (1 + cfg.elDriftPerHit)
+    // Optional EL permanent drift upward (disabled when elDriftPerHit=0)
+    if (cfg.elDriftPerHit > 0) {
+      state.elLol.junior *= (1 + cfg.elDriftPerHit)
+      state.elLol.mid    *= (1 + cfg.elDriftPerHit)
+      state.elLol.remote *= (1 + cfg.elDriftPerHit)
+    }
   } else {
     // === Quiet season: soften multiples (geometric decay toward base) ===
     const base = cfg.initMultiple
