@@ -30,25 +30,43 @@ export interface FrequencyConfig {
 
 export interface SeverityConfig {
   /**
-   * State-level "market PML_100" in USD millions.
-   * Used to normalise EM-DAT industry losses → per-cedent fractional loss.
-   * A cedent in state S sees fraction = (event_loss × state_weight) / statePML100[S]
+   * State-level total-market PML_100 in USD millions.
+   * Normalises EM-DAT industry losses → per-cedent GU loss fraction.
+   *
+   * Calibration target: junior attachment (pml20 × juniorAttachRetention)
+   * should be breached ~7–15% of years per state, i.e. a 1-in-7 to 1-in-15
+   * annual exceedance probability — consistent with "1-in-10 or 1-in-15 PML"
+   * junior attachment language.
+   *
+   * Rule of thumb: statePML100 ≈ (largest historical state event loss) /
+   *                               (desired layer exhaustion fraction, ~1.0–1.5).
+   * FL: Katrina FL-share ~$25–40B at 100% exhaustion → 120 000 $M.
    */
   statePML100Musd: Record<State, number>
   /**
-   * Each simulated cedent represents this fraction of their state's market.
+   * Each cedent represents this fraction of their state's insured market.
    * cedentPML100 = statePML100 × marketShareFraction × exposureScale
    */
   marketShareFraction: number
   /** Cedent exposure scale range [min, max] — random uniform per cedent */
   exposureScaleRange: [number, number]
-  /** PML_20 as fraction of PML_100 (jitter applied around this centre) */
+  /**
+   * PML_20 as fraction of PML_100.
+   * This is the EXHAUSTION point of the junior layer and the ATTACHMENT
+   * of the mid layer.  PML_20 / PML_100 ≈ 0.28–0.35 from historical data.
+   */
   pml20FracCentre: number
   pml20FracJitter: number
-  /** PML_50 as fraction of PML_100 */
+  /**
+   * PML_50 as fraction of PML_100 — exhaustion of mid layer.
+   */
   pml50FracCentre: number
   pml50FracJitter: number
-  /** Junior layer attaches at (attachRetention × PML_20) */
+  /**
+   * Junior layer ATTACHES at (juniorAttachRetention × pml20Frac) of PML_100.
+   * Setting to 0.60 → junior attaches at 60% of PML_20, roughly 1-in-10 level.
+   * Setting to 0.70 → ~1-in-12.  Setting to 0.80 → ~1-in-20 (more conservative).
+   */
   juniorAttachRetention: number
   juniorAttachJitter: number
 }
@@ -58,27 +76,31 @@ export interface SeverityConfig {
 export interface PricingConfig {
   /** Initial ROL multiples (season 0 before any events) */
   initMultiple: { junior: number; mid: number; remote: number }
-  /** Hard-market corridors [min, max] per tier */
+  /** Hard-market corridors [min, max] as MULTIPLES of EL */
   corridorJunior: [number, number]
   corridorMid:    [number, number]
   corridorRemote: [number, number]
   /**
    * After a season with aggregate industry TC loss L (USD bn):
    *   delta_multiple = cycleSensitivity × log(1 + L / cycleNormBn)
-   * Applied proportionally across tiers.
+   * Higher sensitivity → market hardens more per dollar of loss.
+   * Lower cycleNormBn → smaller events already trigger hardening.
    */
   cycleSensitivity: number
   cycleNormBn: number
-  /** Geometric decay toward base multiple per quiet year: multiple *= decayFactor */
+  /** Geometric decay toward base multiple per quiet year */
   decayFactor: number
-  /** Baseline EL loss-on-line per tier (soft-market anchor) */
+  /**
+   * Baseline EL loss-on-line per tier.
+   * Junior = 15%: layers at ~1-in-10 attachment with 50–70% expected fill on hit.
+   *               At 2.5–3.5× multiple → ROL 37–52% → speculative, high-return.
+   * Mid    = 6%:  layers at ~1-in-20 attachment → ROL 15–33% at 2.5–5.5× multiple.
+   * Remote = 2%:  NOT written by portfolio (tier filter), kept for tower display.
+   */
   elLolJunior: number
   elLolMid:    number
   elLolRemote: number
-  /**
-   * EL permanent drift per hit season: elLol *= (1 + elDriftPerHit).
-   * Models secular risk increase (climate proxy).
-   */
+  /** Permanent EL drift per loss season (climate ratchet) */
   elDriftPerHit: number
 }
 
@@ -90,8 +112,13 @@ export interface PortfolioConfig {
   /** Maximum weight any single deal can take */
   maxDealWeight: number
   /**
-   * Sticky layers: if true, deals from layers that saw ANY loss last season
-   * are retained (re-written on same layer) before filling remaining slots.
+   * Target fraction of deals that are junior (remainder = mid).
+   * Remote layers are NEVER written.
+   */
+  juniorFraction: number
+  /**
+   * Sticky layers: layers that saw any loss last season are re-written first.
+   * Ensures the investor stays exposed to layers in loss development.
    */
   stickyLayers: boolean
 }
@@ -101,9 +128,11 @@ export interface PortfolioConfig {
 export interface CapitalConfig {
   /** Investor starting wealth, USD millions */
   initialCapitalMusd: number
-  /** Annual interest rate on full collateral (paid to investor) */
-  collateralYield: number
-  /** Risk-free rate on uninvested cash */
+  /**
+   * Risk-free rate: earned on uninvested cash AND on full collateral in trust.
+   * (Collateral is invested in T-bills at the risk-free rate; interest flows
+   * to the investor unconditionally regardless of loss outcome.)
+   */
   riskFreeRate: number
   /** Trapping period for partial-loss deals, in seasons (years) */
   trappingPeriodSeasons: number
@@ -126,9 +155,9 @@ export interface RecyclingConfig {
 
 export interface SimulationConfig {
   nSeasons: number
-  /** Fixed RNG seed (0 = random) */
+  /** Fixed RNG seed (0 = fresh random each run) */
   seed: number
-  /** Investor equity falls below this → ruin (fraction of initial capital) */
+  /** Investor equity falls below this fraction of initial → ruin */
   ruinThresholdFraction: number
   /** Number of Monte Carlo paths */
   nMCRuns: number
@@ -161,44 +190,57 @@ export const DEFAULT_CONFIG: SimConfig = {
     ],
   },
   severity: {
+    // Calibrated so junior attachment (0.60 × pml20 ≈ 0.18 of pml100) is
+    // breached by ~1-in-10 to 1-in-15 EM-DAT events per state.
+    // E.g. FL: Katrina ($99B × ~27% FL weight) / 120 000 ≈ 0.22 → exceeds 0.18 ✓
     statePML100Musd: {
-      FL: 30000,
-      TX: 40000,
-      LA: 30000,
-      NC: 12000,
-      SC:  8000,
-      GA: 10000,
+      FL: 120000,
+      TX: 100000,
+      LA:  60000,
+      NC:  35000,
+      SC:  22000,
+      GA:  28000,
+      MS:  18000,
+      AL:  18000,
     },
     marketShareFraction: 0.02,
     exposureScaleRange: [0.5, 2.0],
     pml20FracCentre: 0.30,
-    pml20FracJitter: 0.05,
+    pml20FracJitter: 0.04,
     pml50FracCentre: 0.58,
-    pml50FracJitter: 0.05,
-    juniorAttachRetention: 0.80,
+    pml50FracJitter: 0.04,
+    // 0.60 → junior attaches at ~60% of pml20, roughly a 1-in-10 to 1-in-12 event.
+    // Lower (e.g. 0.50) → more aggressive, more frequent losses.
+    // Higher (e.g. 0.80) → more conservative, fewer losses.
+    juniorAttachRetention: 0.60,
     juniorAttachJitter: 0.05,
   },
   pricing: {
-    initMultiple: { junior: 2.0, mid: 3.5, remote: 5.5 },
-    corridorJunior: [1.5, 3.0],
+    // Junior multiple 2.5× × EL 15% = 37.5% ROL → speculative territory.
+    // After a major season the cycle pushes to 3.5× = 52.5% ROL (hard market).
+    initMultiple: { junior: 2.5, mid: 3.5, remote: 5.5 },
+    corridorJunior: [1.5, 3.5],
     corridorMid:    [2.5, 5.5],
     corridorRemote: [3.5, 9.0],
-    cycleSensitivity: 0.55,
-    cycleNormBn: 50,
-    decayFactor: 0.82,
-    elLolJunior: 0.05,
-    elLolMid:    0.02,
-    elLolRemote: 0.01,
-    elDriftPerHit: 0.002,
+    // Higher sensitivity + lower norm = responsive hardening on moderate losses.
+    cycleSensitivity: 1.0,
+    cycleNormBn: 25,
+    // Faster softening: market normalises in ~4–5 quiet years.
+    decayFactor: 0.75,
+    elLolJunior: 0.15,   // 15% → ROL 22–52% depending on multiple
+    elLolMid:    0.06,   // 6%  → ROL 15–33%
+    elLolRemote: 0.02,   // 2%  (reference only; remote layers are not written)
+    elDriftPerHit: 0.003,
   },
   portfolio: {
     nDealsRange: [8, 14],
-    maxDealWeight: 0.20,
+    maxDealWeight: 0.18,
+    juniorFraction: 0.75,  // ~75% juniors, ~25% mid, 0% remote
     stickyLayers: true,
   },
   capital: {
     initialCapitalMusd: 10,
-    collateralYield: 0.035,
+    // Single rate: risk-free rate = collateral yield = interest on T-bill trust.
     riskFreeRate: 0.045,
     trappingPeriodSeasons: 3,
   },
@@ -208,7 +250,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   },
   simulation: {
     nSeasons: 20,
-    seed: 42,
+    seed: 0,   // 0 = random seed each run
     ruinThresholdFraction: 0.10,
     nMCRuns: 10000,
   },

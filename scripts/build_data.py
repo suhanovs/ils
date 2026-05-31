@@ -34,6 +34,8 @@ COVERED = {
     "SC": ["south carolina"],
     "LA": ["louisiana"],
     "TX": ["texas"],
+    "MS": ["mississippi"],
+    "AL": ["alabama"],
 }
 
 

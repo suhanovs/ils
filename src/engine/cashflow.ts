@@ -15,7 +15,7 @@
  * Interest accrues on the FULL trust (= Limit_share) and is paid to
  * the investor regardless of loss outcome (earned on T-bills backing
  * the trust; spec: "interest is paid on the whole, to the investor").
- *   Interest = Limit_share × collateralYield   (unconditional)
+ *   Interest = Limit_share × riskFreeRate   (unconditional)
  *
  * Principal settlement at season end:
  *   Total loss  (fraction = 1.0): trust pays Limit_share to cedent.
@@ -92,7 +92,7 @@ export function settleSeason(
   for (const deal of deals) {
     const lossFraction = lossFractions.get(deal.layer.id) ?? 0
     const lossMusd     = lossFraction * deal.limitShare
-    const interest     = deal.limitShare * cfg.collateralYield
+    const interest     = deal.limitShare * cfg.riskFreeRate
 
     // Interest is paid unconditionally on the full collateral
     totalInterest += interest

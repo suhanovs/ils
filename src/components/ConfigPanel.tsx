@@ -119,14 +119,13 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
           <NumInput value={ca.initialCapitalMusd} min={0.1} step={0.5} disabled={d}
             onChange={(v) => onChange({ capital: { ...ca, initialCapitalMusd: v } })} />
         </Row>
-        <Row label="Collateral yield %">
-          <NumInput value={ca.collateralYield * 100} min={0} max={20} step={0.1} disabled={d}
-            onChange={(v) => onChange({ capital: { ...ca, collateralYield: v / 100 } })} />
-        </Row>
-        <Row label="Risk-free rate %">
+        <Row label="Risk-free / collateral %">
           <NumInput value={ca.riskFreeRate * 100} min={0} max={15} step={0.1} disabled={d}
             onChange={(v) => onChange({ capital: { ...ca, riskFreeRate: v / 100 } })} />
         </Row>
+        <div className="text-slate-500 text-xs px-1 pb-1">
+          Collateral earns RFR (T-bills); interest paid to investor unconditionally.
+        </div>
         <Row label="Trapping period (yrs)">
           <NumInput value={ca.trappingPeriodSeasons} min={1} max={5} step={1} disabled={d}
             onChange={(v) => onChange({ capital: { ...ca, trappingPeriodSeasons: v } })} />
@@ -232,6 +231,13 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
           <NumInput value={po.maxDealWeight * 100} min={5} max={50} step={5} disabled={d}
             onChange={(v) => onChange({ portfolio: { ...po, maxDealWeight: v / 100 } })} />
         </Row>
+        <Row label="Junior fraction %">
+          <NumInput value={po.juniorFraction * 100} min={0} max={100} step={5} disabled={d}
+            onChange={(v) => onChange({ portfolio: { ...po, juniorFraction: v / 100 } })} />
+        </Row>
+        <div className="text-slate-500 text-xs px-1 pb-1">
+          Remainder = mid. Remote layers are never written.
+        </div>
         <Row label="Sticky layers">
           <CheckInput value={po.stickyLayers} disabled={d}
             onChange={(v) => onChange({ portfolio: { ...po, stickyLayers: v } })} />

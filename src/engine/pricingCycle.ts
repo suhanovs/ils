@@ -113,15 +113,15 @@ export function clonePricingState(s: PricingState): PricingState {
 
 /**
  * Expected no-loss return on investor capital for a given tier.
- * return = (ROL + collateralYield) / (1 − ROL)
+ * return = (ROL + riskFreeRate) / (1 − ROL)
  */
 export function expectedNoLossReturn(
   tier:            keyof MarketMultiple,
   state:           PricingState,
-  collateralYield: number
+  riskFreeRate: number
 ): number {
   const rol = state.elLol[tier] * state.multiple[tier]
-  return (rol + collateralYield) / Math.max(1 - rol, 0.01)
+  return (rol + riskFreeRate) / Math.max(1 - rol, 0.01)
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

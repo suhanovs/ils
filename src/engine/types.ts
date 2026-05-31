@@ -10,8 +10,8 @@
 
 // ── States & tiers ─────────────────────────────────────────────────────────
 
-export type State = 'FL' | 'GA' | 'NC' | 'SC' | 'LA' | 'TX'
-export const COVERED_STATES: State[] = ['FL', 'GA', 'NC', 'SC', 'LA', 'TX']
+export type State = 'FL' | 'GA' | 'NC' | 'SC' | 'LA' | 'TX' | 'MS' | 'AL'
+export const COVERED_STATES: State[] = ['FL', 'GA', 'NC', 'SC', 'LA', 'TX', 'MS', 'AL']
 
 export type LayerTier = 'junior' | 'mid' | 'remote'
 
