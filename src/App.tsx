@@ -67,12 +67,12 @@ export default function App() {
           {state.running ? 'Running…' : '▶  Run'}
         </button>
 
-        <div className="flex items-center gap-2 text-xs">
+        <div className="ml-auto flex items-center gap-3 text-xs">
           <a
             href="https://github.com/suhanovs/ils#readme"
             target="_blank"
             rel="noreferrer"
-            className="text-slate-400 hover:text-blue-300"
+            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
           >
             Readme
           </a>
@@ -80,9 +80,17 @@ export default function App() {
             href="https://github.com/suhanovs/ils"
             target="_blank"
             rel="noreferrer"
-            className="text-slate-400 hover:text-blue-300"
+            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
           >
             Source
+          </a>
+          <a
+            href="https://about-ils.s3.amazonaws.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
+          >
+            Data
           </a>
         </div>
 
