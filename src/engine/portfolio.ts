@@ -59,8 +59,16 @@ export function buildPortfolio(
   const nJuniorTarget = Math.max(1, Math.round(N * juniorFraction))
   const nMidTarget    = Math.max(0, N - nJuniorTarget)
 
-  // Always randomize selection each season (remote excluded)
-  const selectedJunior = pickRandomTier(juniorPool, nJuniorTarget)
+  // Junior: maximize return by taking highest multiple first.
+  // Keep a random tie-break so equal-multiple layers are not deterministic.
+  juniorPool.sort((a, b) => {
+    const d = b.multiple - a.multiple
+    if (Math.abs(d) > 1e-9) return d
+    return rng() - 0.5
+  })
+
+  // Mid: still randomized selection.
+  const selectedJunior = pickTopTier(juniorPool, nJuniorTarget)
   const selectedMid    = pickRandomTier(midPool, nMidTarget)
 
   const selectedLayers = [...selectedJunior, ...selectedMid].slice(0, N)
@@ -96,6 +104,11 @@ export function buildPortfolio(
  * Pick up to target layers from a shuffled pool.
  */
 function pickRandomTier(pool: Layer[], target: number): Layer[] {
+  if (target <= 0) return []
+  return pool.slice(0, target)
+}
+
+function pickTopTier(pool: Layer[], target: number): Layer[] {
   if (target <= 0) return []
   return pool.slice(0, target)
 }
