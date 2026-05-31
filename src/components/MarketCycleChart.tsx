@@ -11,7 +11,7 @@
  *            the "industry" EL assumption the model uses.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as echarts from 'echarts'
 import type { PathResult, State } from '../engine/types'
 import type { ROLRecord } from '../data/types'
@@ -34,6 +34,7 @@ function commonOpt(): any {
 }
 
 export function MarketCycleChart({ singleResult, rolHistory }: Props) {
+  const [selectedState, setSelectedState] = useState<State>('FL')
   const topRef = useRef<HTMLDivElement>(null)
   const botRef = useRef<HTMLDivElement>(null)
   const topChart = useRef<echarts.ECharts | null>(null)
@@ -88,20 +89,15 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
         ],
       }, true)
 
-      // ── BOTTOM: state junior EL regimes ──────────────────────────────
-      const stateColors: Record<State, string> = {
-        FL: '#f97316',
-        LA: '#fbbf24',
-        TX: '#38bdf8',
-        GA: '#60a5fa',
-        NC: '#34d399',
-        SC: '#22d3ee',
-        AL: '#a78bfa',
-        MS: '#f472b6',
-      }
-
+      // ── BOTTOM: selected-state EL regimes (junior + mid) ────────────
       bc.setOption({
         ...commonOpt(),
+        title: {
+          text: `${selectedState} EL regime`,
+          textStyle: { color: '#64748b', fontSize: 10 },
+          top: 4,
+          left: 6,
+        },
         xAxis: { type: 'category', data: seasons, axisLabel: { color: '#94a3b8', fontSize: 9 } },
         yAxis: {
           type: 'value', name: 'EL / limit', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
@@ -111,14 +107,24 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
           },
           splitLine: { lineStyle: { color: '#1e293b' } },
         },
-        series: COVERED_STATES.map((state) => ({
-          name: `${state} Jr EL`,
-          type: 'line',
-          data: singleResult.seasons.map(s => +(s.stateJuniorEl[state] ?? 0).toFixed(4)),
-          lineStyle: { color: stateColors[state], width: state === 'FL' || state === 'LA' ? 2 : 1.3 },
-          symbol: 'none',
-          smooth: false,
-        })),
+        series: [
+          {
+            name: `${selectedState} Jr EL`,
+            type: 'line',
+            data: singleResult.seasons.map(s => +(s.stateJuniorEl[selectedState] ?? 0).toFixed(4)),
+            lineStyle: { color: '#f59e0b', width: 2 },
+            symbol: 'none',
+            smooth: false,
+          },
+          {
+            name: `${selectedState} Mid EL`,
+            type: 'line',
+            data: singleResult.seasons.map(s => +(s.stateMidEl[selectedState] ?? 0).toFixed(4)),
+            lineStyle: { color: '#60a5fa', width: 2 },
+            symbol: 'none',
+            smooth: false,
+          },
+        ],
       }, true)
 
     } else {
@@ -178,10 +184,24 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
         ],
       }, true)
     }
-  }, [singleResult, rolHistory])
+  }, [singleResult, rolHistory, selectedState])
 
   return (
     <div className="flex flex-col h-full gap-1">
+      {singleResult && (
+        <div className="flex items-center gap-2 px-1 py-0.5 text-[10px] text-slate-400">
+          <span>State view</span>
+          <select
+            value={selectedState}
+            onChange={(e) => setSelectedState(e.target.value as State)}
+            className="bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-slate-200"
+          >
+            {COVERED_STATES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      )}
       <div className="flex-1 min-h-0" ref={topRef} />
       <div className="flex-1 min-h-0" ref={botRef} />
     </div>
