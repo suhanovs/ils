@@ -67,33 +67,6 @@ export default function App() {
           {state.running ? 'Running…' : '▶  Run'}
         </button>
 
-        <div className="ml-auto flex items-center gap-3 text-xs">
-          <a
-            href="https://github.com/suhanovs/ils#readme"
-            target="_blank"
-            rel="noreferrer"
-            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
-          >
-            Readme
-          </a>
-          <a
-            href="https://github.com/suhanovs/ils"
-            target="_blank"
-            rel="noreferrer"
-            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
-          >
-            Source
-          </a>
-          <a
-            href="https://about-ils.s3.amazonaws.com/"
-            target="_blank"
-            rel="noreferrer"
-            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
-          >
-            Data
-          </a>
-        </div>
-
         {state.running && (
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <div className="w-28 h-1.5 bg-slate-700 rounded-full overflow-hidden">
@@ -121,8 +94,34 @@ export default function App() {
 
         {state.error && <span className="text-red-400 text-xs ml-2 truncate max-w-xs">{state.error}</span>}
 
-        <div className="ml-auto text-xs text-slate-600 hidden lg:block">
-          {bundle.meta.coveredStates.join('/')} · EM-DAT {bundle.meta.rolYears[0]}–{bundle.meta.rolYears[1]}
+        <div className="ml-auto hidden lg:flex items-center gap-3 text-xs">
+          <span className="text-slate-600">
+            {bundle.meta.coveredStates.join('/')} · EM-DAT {bundle.meta.rolYears[0]}–{bundle.meta.rolYears[1]}
+          </span>
+          <a
+            href="https://github.com/suhanovs/ils#readme"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
+          >
+            Readme
+          </a>
+          <a
+            href="https://github.com/suhanovs/ils"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
+          >
+            Source
+          </a>
+          <a
+            href="https://about-ils.s3.amazonaws.com/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
+          >
+            Data
+          </a>
         </div>
       </header>
 
