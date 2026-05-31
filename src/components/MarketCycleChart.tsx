@@ -1,8 +1,9 @@
 /**
  * MarketCycleChart — two stacked charts:
  *
- *  TOP    — ROL multiples over time (simulated or historical).
- *            Shows junior × and mid × to illustrate hardening/softening.
+ *  TOP    — Selected-state pricing over time in simulated mode.
+ *            Shows junior/mid ROL for the selected state + state loss bars.
+ *            In historical mode: market multiples + TC loss bars.
  *
  *  BOTTOM — State-specific junior EL (loss-on-line) over time.
  *            In simulated mode: per-state junior EL from SeasonRecord.stateJuniorEl.
@@ -65,26 +66,54 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
 
     if (singleResult && singleResult.seasons.length > 0) {
       const seasons = singleResult.seasons.map(s => `S${s.season}`)
-      const losses  = singleResult.seasons.map(s => +(s.seasonLossMusd / 1000).toFixed(2))
+      const stateLosses = singleResult.seasons.map((s) => {
+        let loss = 0
+        for (const ev of s.events) {
+          for (const split of ev.stateSplits) {
+            if (split.state === selectedState) loss += ev.industryLossMusd * split.weight
+          }
+        }
+        return +(loss / 1000).toFixed(2)
+      })
 
-      // ── TOP: multiples (written this season) ────────────────────────
+      const stateJuniorRol = singleResult.seasons.map((s) => {
+        const rows = s.deals.filter((d) => d.deal.layer.cedent.state === selectedState && d.deal.layer.tier === 'junior')
+        if (rows.length === 0) return null
+        const avg = rows.reduce((a, d) => a + d.deal.layer.rol, 0) / rows.length
+        return +avg.toFixed(4)
+      })
+
+      const stateMidRol = singleResult.seasons.map((s) => {
+        const rows = s.deals.filter((d) => d.deal.layer.cedent.state === selectedState && d.deal.layer.tier === 'mid')
+        if (rows.length === 0) return null
+        const avg = rows.reduce((a, d) => a + d.deal.layer.rol, 0) / rows.length
+        return +avg.toFixed(4)
+      })
+
+      // ── TOP: selected-state ROL + state loss ────────────────────────
       tc.setOption({
         ...commonOpt(),
+        title: {
+          text: `${selectedState} pricing`,
+          textStyle: { color: '#64748b', fontSize: 10 },
+          top: 4,
+          left: 6,
+        },
         xAxis: { type: 'category', data: seasons, axisLabel: { color: '#94a3b8', fontSize: 9 } },
         yAxis: [
-          { type: 'value', name: 'Multiple ×', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
-            axisLabel: { color: '#94a3b8', fontSize: 9 }, splitLine: { lineStyle: { color: '#1e293b' } } },
+          { type: 'value', name: 'ROL %', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
+            axisLabel: { color: '#94a3b8', fontSize: 9, formatter: (v: number) => `${(v * 100).toFixed(0)}%` }, splitLine: { lineStyle: { color: '#1e293b' } } },
           { type: 'value', name: '$Bn', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
             axisLabel: { color: '#94a3b8', fontSize: 9 }, splitLine: { show: false } },
         ],
         series: [
-          { name: 'Loss $Bn', type: 'bar', yAxisIndex: 1, data: losses,
+          { name: `${selectedState} Loss $Bn`, type: 'bar', yAxisIndex: 1, data: stateLosses,
             itemStyle: { color: '#f87171', opacity: 0.5 }, barMaxWidth: 14 },
-          { name: 'Junior ×', type: 'line',
-            data: singleResult.seasons.map(s => +s.marketMultiple.junior.toFixed(2)),
+          { name: `${selectedState} Jr ROL`, type: 'line',
+            data: stateJuniorRol,
             lineStyle: { color: '#fbbf24', width: 2 }, symbol: 'none', smooth: true },
-          { name: 'Mid ×', type: 'line',
-            data: singleResult.seasons.map(s => +s.marketMultiple.mid.toFixed(2)),
+          { name: `${selectedState} Mid ROL`, type: 'line',
+            data: stateMidRol,
             lineStyle: { color: '#60a5fa', width: 2 }, symbol: 'none', smooth: true },
         ],
       }, true)
