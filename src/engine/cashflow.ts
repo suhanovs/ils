@@ -74,10 +74,16 @@ export interface SettlementResult {
 
 /**
  * Settle all deals at season end.
+ *
+ * @param ibnrDealIds  Deals to IBNR-trap: their state was hit by an event but the
+ *                     layer attachment was not breached.  Full collateral is frozen
+ *                     for 36 months; interest compounds; no loss is confirmed.
+ *                     This models the "incurred but not reported" development window.
  */
 export function settleSeason(
   deals:         Deal[],
   lossFractions: Map<string, number>,
+  ibnrDealIds:   Set<string>,
   currentSeason: number,
   cfg:           CapitalConfig
 ): SettlementResult {
@@ -92,43 +98,39 @@ export function settleSeason(
   for (const deal of deals) {
     const lossFraction = lossFractions.get(deal.layer.id) ?? 0
     const lossMusd     = lossFraction * deal.limitShare
+    const releaseSeason = currentSeason + cfg.trappingPeriodSeasons
 
     totalPremium += deal.premium
 
-    dealRecords.push({
-      deal,
-      lossFraction,
-      lossMusd,
-      releaseSeasonIfTrapped: currentSeason + cfg.trappingPeriodSeasons,
-    })
-
     if (lossFraction >= 1.0) {
       // ── TOTAL LOSS ─────────────────────────────────────────────────────
-      // Cedent claims the entire trust. Investor gets nothing back.
       confirmedLoss += deal.limitShare
-      // investor_capital is permanently lost — captured by the absence of
-      // any return in immediateReturn; no trap needed.
+      dealRecords.push({ deal, lossFraction, lossMusd, status: 'total', releaseSeasonIfTrapped: releaseSeason })
 
     } else if (lossFraction > 0) {
       // ── PARTIAL LOSS ───────────────────────────────────────────────────
-      // Cedent claims f × limitShare.  Remaining (1−f) × limitShare is
-      // frozen in a trap — ZERO immediate income; interest compounds in trap.
-      confirmedLoss += lossMusd
+      // Surviving portion earns interest while trapped (item 10 confirmed).
+      confirmedLoss  += lossMusd
       const remaining = (1 - lossFraction) * deal.limitShare
       newlyTrapped   += remaining
-      newTrappedPositions.push({
-        dealId:        deal.id,
-        tier:          deal.layer.tier,
-        amountMusd:    remaining,
-        releaseSeason: currentSeason + cfg.trappingPeriodSeasons,
-      })
+      newTrappedPositions.push({ dealId: deal.id, tier: deal.layer.tier, amountMusd: remaining, releaseSeason })
+      dealRecords.push({ deal, lossFraction, lossMusd, status: 'partial', releaseSeasonIfTrapped: releaseSeason })
+
+    } else if (ibnrDealIds.has(deal.id)) {
+      // ── IBNR TRAP ──────────────────────────────────────────────────────
+      // No claim yet, but event hit this cedent's state close to attachment.
+      // Trap the FULL trust as a precaution; interest compounds in trap.
+      // On release (36 months): limitShare × (1+RFR)^3 returned with profit.
+      newlyTrapped += deal.limitShare
+      newTrappedPositions.push({ dealId: deal.id, tier: deal.layer.tier, amountMusd: deal.limitShare, releaseSeason })
+      dealRecords.push({ deal, lossFraction: 0, lossMusd: 0, status: 'ibnr', releaseSeasonIfTrapped: releaseSeason })
 
     } else {
-      // ── NO LOSS ────────────────────────────────────────────────────────
-      // Trust returns in full with one period of riskFreeRate interest.
+      // ── CLEAN — no event activity ─────────────────────────────────────
       const interest   = deal.limitShare * cfg.riskFreeRate
       totalInterest   += interest
       immediateReturn += deal.limitShare + interest
+      dealRecords.push({ deal, lossFraction: 0, lossMusd: 0, status: 'clean', releaseSeasonIfTrapped: releaseSeason })
     }
   }
 

@@ -107,16 +107,29 @@ export function flowLossUpTower(
  * Returns a flat map from layerId → lossFraction (max across events, because
  * a second event hitting a partially-impaired layer adds to the loss).
  */
+export interface SeasonLossResult {
+  events: HurricaneEvent[]
+  /** layerId → cumulative loss fraction ∈ (0,1] for layers with actual losses */
+  layerLossFractions: Map<string, number>
+  /**
+   * state → maximum GU loss fraction of PML_100 observed in any event this season.
+   * Used by IBNR logic: layers in states that experienced significant GU loss
+   * (even below their attachment) are trapped pending loss development.
+   */
+  maxGUFractionByState: Map<State, number>
+}
+
 export function computeSeasonTowerLosses(
-  rng:      Rng,
+  rng:        Rng,
   eventCount: number,
-  pool:     EMDATEvent[],
-  towers:   Map<State, Layer[]>,   // cedent state → its 3 layers
-  cedents:  Map<State, Cedent>,
-  cfg:      SimConfig
-): { events: HurricaneEvent[]; layerLossFractions: Map<string, number> } {
-  const events: HurricaneEvent[]         = []
-  const accumulated = new Map<string, number>() // layerId → cumulative loss fraction
+  pool:       EMDATEvent[],
+  towers:     Map<State, Layer[]>,
+  cedents:    Map<State, Cedent>,
+  cfg:        SimConfig
+): SeasonLossResult {
+  const events: HurricaneEvent[]            = []
+  const accumulated    = new Map<string, number>()  // layerId → loss fraction
+  const maxGUByState   = new Map<State, number>()   // state  → max GU fraction
 
   for (let e = 0; e < eventCount; e++) {
     const event = sampleEvent(rng, pool, cfg)
@@ -124,19 +137,18 @@ export function computeSeasonTowerLosses(
     events.push(event)
 
     for (const { state, weight } of event.stateSplits) {
-      const layers  = towers.get(state)
-      const cedent  = cedents.get(state)
+      const layers = towers.get(state)
+      const cedent = cedents.get(state)
       if (!layers || !cedent) continue
 
-      // Industry loss → cedent fraction of PML_100
       const guFrac = (event.industryLossMusd * weight) /
                       cfg.severity.statePML100Musd[state]
 
-      const hits = flowLossUpTower(guFrac, layers)
-      for (const { layer, lossFraction } of hits) {
+      // Track max GU fraction per state (for IBNR logic)
+      maxGUByState.set(state, Math.max(maxGUByState.get(state) ?? 0, guFrac))
+
+      for (const { layer, lossFraction } of flowLossUpTower(guFrac, layers)) {
         if (lossFraction > 0) {
-          // Accumulate losses: multiple events can hit the same layer
-          // The layer pays the min(total cumulative loss, 100%)
           const prev = accumulated.get(layer.id) ?? 0
           accumulated.set(layer.id, Math.min(prev + lossFraction, 1.0))
         }
@@ -144,7 +156,7 @@ export function computeSeasonTowerLosses(
     }
   }
 
-  return { events, layerLossFractions: accumulated }
+  return { events, layerLossFractions: accumulated, maxGUFractionByState: maxGUByState }
 }
 
 // ── Convenience: describe event impact ────────────────────────────────────

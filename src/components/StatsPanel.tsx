@@ -1,5 +1,5 @@
 /**
- * StatsPanel — summary statistics beneath the equity curve.
+ * StatsPanel — key metrics displayed in a compact vertical column.
  * Adapts to single-run or MC mode.
  */
 
@@ -13,16 +13,21 @@ interface Props {
   config:       SimConfig
 }
 
-const fmt = (v: number, decimals = 2) => v.toFixed(decimals)
-const pct = (v: number) => `${(v * 100).toFixed(1)}%`
-const dollar = (v: number) => `$${fmt(v)}M`
-const sign = (v: number) => (v >= 0 ? '+' : '')
+const fmtM   = (v: number) => `$${v.toFixed(2)}M`
+const fmtPct = (v: number) => `${(v * 100).toFixed(1)}%`
+const fmtN   = (v: number) => v.toFixed(2)
+const sign   = (v: number) => (v >= 0 ? '+' : '')
 
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
+function Stat({
+  label, value, color, sub,
+}: { label: string; value: string; color?: string; sub?: string }) {
   return (
-    <div className="stat-card">
-      <span className="label">{label}</span>
-      <span className={`value text-base font-bold ${color ?? 'text-slate-100'}`}>{value}</span>
+    <div className="flex items-baseline justify-between gap-2 py-1 border-b border-slate-700/50 last:border-0">
+      <span className="text-xs text-slate-400 leading-tight flex-shrink-0">{label}</span>
+      <span className={`text-xs font-bold font-mono text-right ${color ?? 'text-slate-100'}`}>
+        {value}
+        {sub && <span className="text-slate-500 font-normal ml-1">{sub}</span>}
+      </span>
     </div>
   )
 }
@@ -31,66 +36,65 @@ function SingleStats({ result, config }: { result: PathResult; config: SimConfig
   const initial  = config.capital.initialCapitalMusd
   const terminal = result.terminalEquity
   const totalRet = (terminal - initial) / initial
-  const n        = config.simulation.nSeasons
-
-  const totalPremium  = result.seasons.reduce((s, r) => s + r.totalPremium, 0)
-  const totalLoss     = result.seasons.reduce((s, r) => s + r.confirmedLoss, 0)
-  const totalInterest = result.seasons.reduce((s, r) => s + r.totalInterest, 0)
-  const nLossSeasons  = result.seasons.filter((r) => r.confirmedLoss > 0).length
+  const nLoss    = result.seasons.filter(r => r.confirmedLoss > 0).length
+  const nIbnr    = result.seasons.filter(r => r.deals.some(d => d.status === 'ibnr')).length
+  const premium  = result.seasons.reduce((s, r) => s + r.totalPremium, 0)
+  const losses   = result.seasons.reduce((s, r) => s + r.confirmedLoss, 0)
+  const interest = result.seasons.reduce((s, r) => s + r.totalInterest, 0)
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-      <Stat label="Terminal equity" value={dollar(terminal)}
-        color={terminal > initial ? 'green' : 'red'} />
-      <Stat label="Total return" value={`${sign(totalRet)}${pct(totalRet)}`}
-        color={totalRet >= 0 ? 'green' : 'red'} />
-      <Stat label="CAGR" value={`${sign(result.cagr)}${pct(result.cagr)}`}
-        color={result.cagr >= 0 ? 'green' : 'red'} />
-      <Stat label="Seasons" value={`${n}`} />
-      <Stat label="Loss seasons" value={`${nLossSeasons}`} color={nLossSeasons > 0 ? 'amber' : 'green'} />
-      <Stat label="Premiums earned" value={dollar(totalPremium)} color="blue" />
-      <Stat label="Interest earned" value={dollar(totalInterest)} color="blue" />
-      <Stat label="Losses paid" value={dollar(totalLoss)} color={totalLoss > 0 ? 'red' : 'green'} />
+    <div className="px-1">
+      <Stat label="Terminal equity" value={fmtM(terminal)}
+        color={terminal > initial ? 'text-emerald-400' : 'text-red-400'} />
+      <Stat label="Total return" value={`${sign(totalRet)}${fmtPct(totalRet)}`}
+        color={totalRet >= 0 ? 'text-emerald-400' : 'text-red-400'} />
+      <Stat label="CAGR" value={`${sign(result.cagr)}${fmtPct(result.cagr)}`}
+        color={result.cagr >= 0 ? 'text-emerald-400' : 'text-red-400'} />
+      <Stat label="Seasons" value={`${config.simulation.nSeasons}`} />
+      <Stat label="Loss seasons" value={`${nLoss}`}
+        color={nLoss > 0 ? 'text-red-400' : 'text-emerald-400'} />
+      <Stat label="IBNR seasons" value={`${nIbnr}`}
+        color={nIbnr > 0 ? 'text-amber-400' : 'text-emerald-400'} />
+      <Stat label="Premiums earned" value={fmtM(premium)} color="text-blue-400" />
+      <Stat label="Interest earned"  value={fmtM(interest)} color="text-blue-300" />
+      <Stat label="Confirmed losses" value={fmtM(losses)}
+        color={losses > 0 ? 'text-red-400' : 'text-emerald-400'} />
     </div>
   )
 }
 
 function MCStats({ result, config }: { result: MCResult; config: SimConfig }) {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
-      <Stat label="Survival rate" value={pct(result.survivalRate)}
-        color={result.survivalRate > 0.9 ? 'green' : result.survivalRate > 0.7 ? 'amber' : 'red'} />
-      <Stat label="Paths run" value={result.nRuns.toLocaleString()} />
-      <Stat label="Ruined" value={result.nRuined.toLocaleString()} color={result.nRuined > 0 ? 'red' : 'green'} />
-      <Stat label="Median terminal" value={dollar(result.terminalMedian)} color="blue" />
-      <Stat label="Mean CAGR" value={`${sign(result.cagrMean)}${pct(result.cagrMean)}`}
-        color={result.cagrMean >= 0 ? 'green' : 'red'} />
-      <Stat label="Median CAGR" value={`${sign(result.cagrP50)}${pct(result.cagrP50)}`}
-        color={result.cagrP50 >= 0 ? 'green' : 'red'} />
-      <Stat label="Sharpe ratio" value={fmt(result.sharpe)}
-        color={result.sharpe > 1 ? 'green' : result.sharpe > 0.5 ? 'amber' : 'red'} />
-      <Stat label="P5 terminal" value={dollar(result.terminalP5)} color="amber" />
+    <div className="px-1">
+      <Stat label="Survival rate" value={fmtPct(result.survivalRate)}
+        color={result.survivalRate > 0.9 ? 'text-emerald-400' : result.survivalRate > 0.7 ? 'text-amber-400' : 'text-red-400'} />
+      <Stat label="Paths run"      value={result.nRuns.toLocaleString()} />
+      <Stat label="Ruined paths"   value={result.nRuined.toLocaleString()}
+        color={result.nRuined > 0 ? 'text-red-400' : 'text-emerald-400'} />
+      <Stat label="Median terminal" value={fmtM(result.terminalMedian)} color="text-blue-400" />
+      <Stat label="P5 terminal"    value={fmtM(result.terminalP5)} color="text-amber-400" />
+      <Stat label="P95 terminal"   value={fmtM(result.terminalP95)} color="text-purple-400" />
+      <Stat label="Mean CAGR"      value={`${sign(result.cagrMean)}${fmtPct(result.cagrMean)}`}
+        color={result.cagrMean >= 0 ? 'text-emerald-400' : 'text-red-400'} />
+      <Stat label="Median CAGR"    value={`${sign(result.cagrP50)}${fmtPct(result.cagrP50)}`}
+        color={result.cagrP50 >= 0 ? 'text-emerald-400' : 'text-red-400'} />
+      <Stat label="Sharpe (median)" value={fmtN(result.sharpe)}
+        color={result.sharpe > 1.3 ? 'text-emerald-400' : result.sharpe > 0.8 ? 'text-amber-400' : 'text-red-400'}
+        sub="per-path" />
+      <Stat label="Initial capital" value={fmtM(config.capital.initialCapitalMusd)} />
     </div>
   )
 }
 
 export function StatsPanel({ singleResult, mcResult, mode, config }: Props) {
   if (mode === 'single' && singleResult) {
-    return (
-      <div className="mt-3">
-        <SingleStats result={singleResult} config={config} />
-      </div>
-    )
+    return <SingleStats result={singleResult} config={config} />
   }
   if (mode === 'mc' && mcResult) {
-    return (
-      <div className="mt-3">
-        <MCStats result={mcResult} config={config} />
-      </div>
-    )
+    return <MCStats result={mcResult} config={config} />
   }
   return (
-    <div className="mt-3 text-slate-500 text-xs text-center py-4">
+    <div className="text-slate-600 text-xs px-2 py-3">
       Run a simulation to see statistics.
     </div>
   )

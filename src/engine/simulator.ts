@@ -105,12 +105,32 @@ export function runPath(
     const { count: eventCount, nextCoxState } = drawEventCount(rng, cfg.frequency, coxState)
     coxState = nextCoxState
 
-    const { events, layerLossFractions } = computeSeasonTowerLosses(
+    const { events, layerLossFractions, maxGUFractionByState } = computeSeasonTowerLosses(
       rng, eventCount, pool, towers, cedents, cfg
     )
 
+    // ── 7b. IBNR: identify deals to trap even without confirmed losses ─────
+    //
+    // Any deal whose cedent's state was hit by a GU loss exceeding
+    // IBNR_TRIGGER × layer.attachFrac gets trapped for 36 months,
+    // even if the attachment was NOT breached.  This models the
+    // development / IBNR uncertainty window common in reinsurance.
+    // The full trust is frozen; interest compounds; no loss is confirmed.
+    // If nothing develops, investor gets limitShare × (1+RFR)^3 at release.
+    const IBNR_TRIGGER = 0.60   // trap if GU reached ≥ 60% of attachment
+    const ibnrDealIds = new Set<string>()
+    for (const deal of deals) {
+      // Skip deals that already have confirmed losses
+      if ((layerLossFractions.get(deal.layer.id) ?? 0) > 0) continue
+      const state = deal.layer.cedent.state as State
+      const maxGU = maxGUFractionByState.get(state) ?? 0
+      if (maxGU >= IBNR_TRIGGER * deal.layer.attachFrac) {
+        ibnrDealIds.add(deal.id)
+      }
+    }
+
     // ── 8. Settle deals ────────────────────────────────────────────────────
-    const settlement = settleSeason(deals, layerLossFractions, s, cfg.capital)
+    const settlement = settleSeason(deals, layerLossFractions, ibnrDealIds, s, cfg.capital)
     trapped.push(...settlement.newTrappedPositions)
 
     // ── 9. Compute equity = liquid + trapped ───────────────────────────────
@@ -160,7 +180,7 @@ export function runPath(
       for (let r = s + 1; r <= cfg.simulation.nSeasons; r++) {
         seasons.push(emptySeasonRecord(r, 0, pricingState))
       }
-      return { seasons, ruined: true, terminalEquity: 0, cagr: -1 }
+      return { seasons, ruined: true, terminalEquity: 0, cagr: -1, seed: effectiveSeed }
     }
   }
 
@@ -168,7 +188,7 @@ export function runPath(
   const n              = cfg.simulation.nSeasons
   const cagr           = Math.pow(terminalEquity / cfg.capital.initialCapitalMusd, 1 / n) - 1
 
-  return { seasons, ruined: false, terminalEquity, cagr }
+  return { seasons, ruined: false, terminalEquity, cagr, seed: effectiveSeed }
 }
 
 // ── Monte Carlo aggregator ────────────────────────────────────────────────
@@ -194,15 +214,12 @@ export function runMonteCarlo(
   const cagrs:            number[] = []
   let nRuined = 0
 
-  // Per-path Sharpe collection.
-  // Sharpe = mean(r_t − rfr) / std(r_t − rfr)  where r_t = annual return on total equity.
-  // We compute one Sharpe per path, then take the MEDIAN across all paths.
-  // This correctly captures the within-path return variability, not the
-  // pooled cross-path variability (which inflates Sharpe by smoothing losses).
   const perPathSharpes: number[] = []
-
-  // Pooled annual returns for the return histogram
   const allAnnualReturns: number[] = []
+
+  // Track the 5 worst paths (lowest terminal equity) for the "ruin paths" chart
+  const WORST_N = 5
+  const worstPaths: { terminal: number; equity: number[]; seed: number }[] = []
 
   const REPORT_EVERY = Math.max(1, Math.floor(nRuns / 100))
 
@@ -216,6 +233,16 @@ export function runMonteCarlo(
 
     for (let s = 0; s < nSeasons; s++) {
       equityMatrix[s].push(result.seasons[s]?.equity ?? 0)
+    }
+
+    // ── Track worst N paths ────────────────────────────────────────────
+    const pathEquity = [cfg.capital.initialCapitalMusd, ...result.seasons.map(s => s.equity)]
+    if (worstPaths.length < WORST_N) {
+      worstPaths.push({ terminal: result.terminalEquity, equity: pathEquity, seed: result.seed })
+      worstPaths.sort((a, b) => a.terminal - b.terminal)
+    } else if (result.terminalEquity < worstPaths[WORST_N - 1].terminal) {
+      worstPaths[WORST_N - 1] = { terminal: result.terminalEquity, equity: pathEquity, seed: result.seed }
+      worstPaths.sort((a, b) => a.terminal - b.terminal)
     }
 
     // ── Per-path Sharpe ────────────────────────────────────────────────
@@ -267,6 +294,7 @@ export function runMonteCarlo(
     // Lower than target?  → Losses too frequent or ROL too low.
     sharpe:         pct(perPathSharpes, 50),
     returnBuckets:  histogram(allAnnualReturns, 40),
+    worstPaths:     worstPaths.map(p => ({ equity: p.equity, seed: p.seed })),
   }
 }
 

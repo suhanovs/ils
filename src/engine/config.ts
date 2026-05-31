@@ -179,7 +179,7 @@ export interface SimConfig {
 
 export const DEFAULT_CONFIG: SimConfig = {
   frequency: {
-    model: 'negbinom',
+    model: 'cox',
     meanAnnual: 1.8,
     negbinomDispersion: 2.0,
     coxStateMultipliers: [0.6, 1.0, 1.5],
@@ -224,9 +224,9 @@ export const DEFAULT_CONFIG: SimConfig = {
     juniorAttachJitter: 0.05,
   },
   pricing: {
-    // Junior multiple 2.5× × EL 15% = 37.5% ROL → speculative territory.
-    // After a major season the cycle pushes to 3.5× = 52.5% ROL (hard market).
-    initMultiple: { junior: 2.5, mid: 3.5, remote: 5.5 },
+    // Junior 1.25× × EL 15% = 18.75% ROL at soft-market entry.
+    // After a bad season the cycle pushes toward 3.5× = 52.5% (hard market cap).
+    initMultiple: { junior: 1.25, mid: 1.75, remote: 5.5 },
     corridorJunior: [1.5, 3.5],
     corridorMid:    [2.5, 5.5],
     corridorRemote: [3.5, 9.0],

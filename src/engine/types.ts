@@ -91,10 +91,22 @@ export interface LayerLossResult {
 
 // ── Season record ──────────────────────────────────────────────────────────
 
+/**
+ * Per-deal status at season end.
+ *  clean        — no event activity in the cedent's state; collateral returned.
+ *  ibnr         — event hit the cedent's state but didn't breach the layer.
+ *                 Full collateral TRAPPED for 36 months per IBNR convention
+ *                 (loss may develop; better safe than sorry). Interest compounds.
+ *  partial      — layer breached but not exhausted; remaining collateral trapped.
+ *  total        — layer fully exhausted; investorCapital gone.
+ */
+export type DealStatus = 'clean' | 'ibnr' | 'partial' | 'total'
+
 export interface DealRecord {
   deal: Deal
   lossFraction: number
   lossMusd: number
+  status: DealStatus
   /** Season in which this deal's collateral (if trapped) will be released */
   releaseSeasonIfTrapped: number
 }
@@ -142,6 +154,8 @@ export interface PathResult {
   terminalEquity: number
   /** Annualised return (CAGR) over the full path */
   cagr: number
+  /** The actual seed used (for reproducible comparison runs) */
+  seed: number
 }
 
 export interface MCResult {
@@ -163,4 +177,6 @@ export interface MCResult {
   sharpe: number
   /** Annual return histogram buckets */
   returnBuckets: { lo: number; hi: number; count: number }[]
+  /** The 5 paths with the lowest terminal equity (equity curve + seed) */
+  worstPaths: { equity: number[]; seed: number }[]
 }

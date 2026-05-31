@@ -211,26 +211,59 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
           <NumInput value={pr.decayFactor} min={0.5} max={0.99} step={0.01} disabled={d}
             onChange={(v) => onChange({ pricing: { ...pr, decayFactor: v } })} />
         </Row>
-        <Row label="EL drift/hit %">
-          <NumInput value={pr.elDriftPerHit * 100} min={0} max={2} step={0.05} disabled={d}
-            onChange={(v) => onChange({ pricing: { ...pr, elDriftPerHit: v / 100 } })} />
+        {/* EL drift — permanent secular creep after each loss season */}
+        <Row label="EL drift enabled">
+          <CheckInput value={pr.elDriftPerHit > 0} disabled={d}
+            onChange={(v) => onChange({ pricing: { ...pr, elDriftPerHit: v ? 0.003 : 0 } })} />
         </Row>
+        {pr.elDriftPerHit > 0 && (
+          <Row label="Drift/hit %">
+            <NumInput value={pr.elDriftPerHit * 100} min={0.01} max={2} step={0.05} disabled={d}
+              onChange={(v) => onChange({ pricing: { ...pr, elDriftPerHit: v / 100 } })} />
+          </Row>
+        )}
+        {pr.elDriftPerHit <= 0 && (
+          <div className="text-slate-600 text-xs px-1 pb-1">
+            EL stays constant across seasons (no climate ratchet).
+          </div>
+        )}
       </Section>
 
       {/* ── PORTFOLIO ── */}
       <Section title="Portfolio" color="purple">
         <Row label="Min deals">
           <NumInput value={po.nDealsRange[0]} min={2} max={20} step={1} disabled={d}
-            onChange={(v) => onChange({ portfolio: { ...po, nDealsRange: [v, po.nDealsRange[1]] } })} />
+            onChange={(v) => {
+              const minW = Math.ceil(100 / po.nDealsRange[1]) / 100
+              onChange({ portfolio: { ...po, nDealsRange: [v, po.nDealsRange[1]], maxDealWeight: Math.max(po.maxDealWeight, minW) } })
+            }} />
         </Row>
         <Row label="Max deals">
           <NumInput value={po.nDealsRange[1]} min={2} max={30} step={1} disabled={d}
-            onChange={(v) => onChange({ portfolio: { ...po, nDealsRange: [po.nDealsRange[0], v] } })} />
+            onChange={(v) => {
+              // When max deals changes, ensure maxDealWeight ≥ 1/maxDeals
+              const minW = Math.ceil(100 / v) / 100
+              onChange({ portfolio: { ...po, nDealsRange: [po.nDealsRange[0], v], maxDealWeight: Math.max(po.maxDealWeight, minW) } })
+            }} />
         </Row>
-        <Row label="Max deal weight %">
-          <NumInput value={po.maxDealWeight * 100} min={5} max={50} step={5} disabled={d}
-            onChange={(v) => onChange({ portfolio: { ...po, maxDealWeight: v / 100 } })} />
-        </Row>
+        {/* Validation: weight must be ≥ 1/nDealsMax */}
+        {(() => {
+          const minW = Math.ceil(100 / po.nDealsRange[1])
+          const warn = po.maxDealWeight * 100 < minW
+          return (
+            <>
+              <Row label="Max deal weight %">
+                <NumInput value={po.maxDealWeight * 100} min={minW} max={100} step={1} disabled={d}
+                  onChange={(v) => onChange({ portfolio: { ...po, maxDealWeight: Math.max(v / 100, minW / 100) } })} />
+              </Row>
+              {warn && (
+                <div className="text-red-400 text-xs px-1 pb-1">
+                  Min {minW}% required for {po.nDealsRange[1]} deals
+                </div>
+              )}
+            </>
+          )
+        })()}
         <Row label="Junior fraction %">
           <NumInput value={po.juniorFraction * 100} min={0} max={100} step={5} disabled={d}
             onChange={(v) => onChange({ portfolio: { ...po, juniorFraction: v / 100 } })} />
