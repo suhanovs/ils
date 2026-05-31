@@ -132,17 +132,17 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const series: any[] = [ruinSeries]
 
-      // 5 worst paths (will likely be ruinous)
-      const worstColors = ['#ef4444', '#f97316', '#fb923c', '#fbbf24', '#facc15']
-      for (let i = 0; i < mcResult.worstPaths.length; i++) {
-        const wp = mcResult.worstPaths[i]
+      // Plot all negative-outcome paths in one color, no smoothing.
+      for (let i = 0; i < mcResult.negativePaths.length; i++) {
+        const wp = mcResult.negativePaths[i]
         series.push({
           type: 'line',
-          name: `Worst ${i + 1}`,
+          name: i === 0 ? 'Negative paths' : '',
           data: wp.equity.map(yVal),
-          color: worstColors[i] ?? '#ef4444',
-          lineStyle: { color: worstColors[i] ?? '#ef4444', width: 1.2, type: 'dashed', opacity: 0.7 },
-          symbol: 'none', smooth: true,
+          color: '#ef4444',
+          lineStyle: { color: '#ef4444', width: 0.8, opacity: 0.55 },
+          symbol: 'none', smooth: false,
+          showSymbol: false,
         })
       }
 

@@ -261,9 +261,8 @@ export function runMonteCarlo(
   const perPathSharpes: number[] = []
   const allAnnualReturns: number[] = []
 
-  // Track the 5 worst paths (lowest terminal equity) for the "ruin paths" chart
-  const WORST_N = 5
-  const worstPaths: { terminal: number; equity: number[]; seed: number }[] = []
+  // Track all negative-outcome paths for MC overlay.
+  const negativePaths: { equity: number[]; seed: number }[] = []
 
   const REPORT_EVERY = Math.max(1, Math.floor(nRuns / 100))
 
@@ -279,14 +278,10 @@ export function runMonteCarlo(
       equityMatrix[s].push(result.seasons[s]?.equity ?? 0)
     }
 
-    // ── Track worst N paths ────────────────────────────────────────────
+    // ── Track negative-outcome paths ───────────────────────────────────
     const pathEquity = [cfg.capital.initialCapitalMusd, ...result.seasons.map(s => s.equity)]
-    if (worstPaths.length < WORST_N) {
-      worstPaths.push({ terminal: result.terminalEquity, equity: pathEquity, seed: result.seed })
-      worstPaths.sort((a, b) => a.terminal - b.terminal)
-    } else if (result.terminalEquity < worstPaths[WORST_N - 1].terminal) {
-      worstPaths[WORST_N - 1] = { terminal: result.terminalEquity, equity: pathEquity, seed: result.seed }
-      worstPaths.sort((a, b) => a.terminal - b.terminal)
+    if (result.terminalEquity < cfg.capital.initialCapitalMusd) {
+      negativePaths.push({ equity: pathEquity, seed: result.seed })
     }
 
     // ── Per-path Sharpe ────────────────────────────────────────────────
@@ -338,7 +333,7 @@ export function runMonteCarlo(
     // Lower than target?  → Losses too frequent or ROL too low.
     sharpe:         pct(perPathSharpes, 50),
     returnBuckets:  histogram(allAnnualReturns, 40),
-    worstPaths:     worstPaths.map(p => ({ equity: p.equity, seed: p.seed })),
+    negativePaths,
   }
 }
 

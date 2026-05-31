@@ -118,7 +118,7 @@ export default function App() {
               <div className="flex-shrink-0 flex items-center gap-2 mb-1">
                 <span className="label text-xs">
                   {!isSingle
-                    ? 'Monte Carlo Fan (P5 / P25 / Median / P75 / P95)  +  5 Worst Paths'
+                    ? 'Monte Carlo Fan (P5 / P25 / Median / P75 / P95)  +  Negative Paths'
                     : 'Investor Equity Path'}
                 </span>
                 {isSingle && (
@@ -173,7 +173,7 @@ export default function App() {
               {/* MC mode: hint about worst paths */}
               {!isSingle && state.mcResult && (
                 <div className="panel p-2 text-xs text-slate-500">
-                  5 worst paths (red/orange dashed) shown on equity chart.
+                  All negative-outcome paths shown on equity chart (red, unsmoothed).
                   Lower <b className="text-slate-400">State PML100</b> to increase loss frequency.
                 </div>
               )}

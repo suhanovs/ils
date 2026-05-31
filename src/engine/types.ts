@@ -181,6 +181,6 @@ export interface MCResult {
   sharpe: number
   /** Annual return histogram buckets */
   returnBuckets: { lo: number; hi: number; count: number }[]
-  /** The 5 paths with the lowest terminal equity (equity curve + seed) */
-  worstPaths: { equity: number[]; seed: number }[]
+  /** All paths with terminal equity below starting net worth */
+  negativePaths: { equity: number[]; seed: number }[]
 }
