@@ -14,8 +14,8 @@ import type { ILSDataBundle } from './data/types'
 const bundle = ilsData as ILSDataBundle
 
 // Heights for the two full-width bottom panels (single-run mode)
-const GRID_H  = 210   // px — Layer Status Grid
-const LOG_H   = 180   // px — Season Log
+const GRID_H  = 315   // px — Layer Status Grid  (+50%)
+const LOG_H   = 270   // px — Season Log          (+50%)
 
 export default function App() {
   const [config, setConfig]               = useState<SimConfig>(DEFAULT_CONFIG)
@@ -203,7 +203,7 @@ export default function App() {
                    style={{ height: LOG_H }}>
                 <span className="label text-xs mb-1 flex-shrink-0">Season Log</span>
                 <div className="flex-1 min-h-0 overflow-auto">
-                  <SeasonLog result={state.singleResult} />
+                  <SeasonLog result={state.singleResult} initialCapital={config.capital.initialCapitalMusd} />
                 </div>
               </div>
             </>
