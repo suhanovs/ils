@@ -77,17 +77,13 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
       })
 
       const stateJuniorRol = singleResult.seasons.map((s) => {
-        const rows = s.deals.filter((d) => d.deal.layer.cedent.state === selectedState && d.deal.layer.tier === 'junior')
-        if (rows.length === 0) return null
-        const avg = rows.reduce((a, d) => a + d.deal.layer.rol, 0) / rows.length
-        return +avg.toFixed(4)
+        const raw = (s.stateJuniorEl[selectedState] ?? 0) * s.marketMultiple.junior
+        return +Math.min(0.60, raw).toFixed(4)
       })
 
       const stateMidRol = singleResult.seasons.map((s) => {
-        const rows = s.deals.filter((d) => d.deal.layer.cedent.state === selectedState && d.deal.layer.tier === 'mid')
-        if (rows.length === 0) return null
-        const avg = rows.reduce((a, d) => a + d.deal.layer.rol, 0) / rows.length
-        return +avg.toFixed(4)
+        const raw = (s.stateMidEl[selectedState] ?? 0) * s.marketMultiple.mid
+        return +Math.min(0.35, raw).toFixed(4)
       })
 
       // ── TOP: selected-state ROL + state loss ────────────────────────
