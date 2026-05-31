@@ -68,16 +68,6 @@ export default function App() {
           {state.running ? 'Running…' : '▶  Run'}
         </button>
 
-        <label className="flex items-center gap-1 text-xs ml-1 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            className="w-3 h-3 accent-blue-500"
-            checked={lightMode}
-            onChange={e => setLightMode(e.target.checked)}
-          />
-          <span className="text-slate-300">Light</span>
-        </label>
-
         {state.running && (
           <div className="flex items-center gap-2 text-xs text-slate-400">
             <div className="w-28 h-1.5 bg-slate-700 rounded-full overflow-hidden">
@@ -133,6 +123,13 @@ export default function App() {
           >
             Data
           </a>
+          <button
+            type="button"
+            onClick={() => setLightMode(v => !v)}
+            className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
+          >
+            {lightMode ? 'Night' : 'Light'}
+          </button>
         </div>
       </header>
 

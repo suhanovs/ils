@@ -146,8 +146,12 @@ export function computeSeasonTowerLosses(
   const accumulated    = new Map<string, number>()  // layerId → loss fraction
   const maxGUByState   = new Map<State, number>()   // state  → max GU fraction
 
-  for (let e = 0; e < eventCount; e++) {
-    const event = sampleEvent(rng, pool, cfg)
+  const order = shuffledIndices(rng, pool.length)
+  const nDraw = Math.min(eventCount, pool.length)
+
+  for (let e = 0; e < nDraw; e++) {
+    const emdat = pool[order[e]]
+    const event = sampleSpecificEvent(rng, emdat)
     if (!event) continue
     events.push(event)
 
@@ -190,4 +194,40 @@ function selectAnchorState(states: State[]): State | null {
   if (states.includes('TX')) return 'TX'
   if (states.includes('LA')) return 'LA'
   return null
+}
+
+function sampleSpecificEvent(rng: Rng, emdat: EMDATEvent): HurricaneEvent | null {
+  const coveredStates = emdat.states.filter((s) => COVERED_STATES.includes(s as State)) as State[]
+  if (coveredStates.length === 0) return null
+
+  const anchor = selectAnchorState(coveredStates)
+  let stateSplits: { state: State; weight: number }[]
+
+  if (anchor && coveredStates.length > 1) {
+    const others = coveredStates.filter((s) => s !== anchor)
+    const remWeights = dirichletWeights(rng, others.length, 0.9)
+    stateSplits = [
+      { state: anchor, weight: 2 / 3 },
+      ...others.map((state, i) => ({ state, weight: (1 / 3) * remWeights[i] })),
+    ]
+  } else {
+    const rawWeights = dirichletWeights(rng, coveredStates.length, 0.9)
+    stateSplits = coveredStates.map((state, i) => ({ state, weight: rawWeights[i] }))
+  }
+
+  return {
+    year: emdat.year,
+    name: emdat.name,
+    industryLossMusd: emdat.lossMusd,
+    stateSplits,
+  }
+}
+
+function shuffledIndices(rng: Rng, n: number): number[] {
+  const arr = Array.from({ length: n }, (_, i) => i)
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
 }
