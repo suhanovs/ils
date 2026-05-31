@@ -4,8 +4,8 @@
  *  TOP    — ROL multiples over time (simulated or historical).
  *            Shows junior × and mid × to illustrate hardening/softening.
  *
- *  BOTTOM — Expected loss (loss-on-line) per tier over time.
- *            In simulated mode: globalEl.junior / mid / remote from SeasonRecord.
+ *  BOTTOM — State-specific junior EL (loss-on-line) over time.
+ *            In simulated mode: per-state junior EL from SeasonRecord.stateJuniorEl.
  *            In historical mode: static reference lines (5% / 2% / 1%).
  *            EL is identical for all cedents (global drift); this is effectively
  *            the "industry" EL assumption the model uses.
@@ -13,8 +13,9 @@
 
 import { useEffect, useRef } from 'react'
 import * as echarts from 'echarts'
-import type { PathResult } from '../engine/types'
+import type { PathResult, State } from '../engine/types'
 import type { ROLRecord } from '../data/types'
+import { COVERED_STATES } from '../engine/types'
 
 interface Props {
   singleResult: PathResult | null
@@ -87,7 +88,18 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
         ],
       }, true)
 
-      // ── BOTTOM: EL loss-on-line drift ────────────────────────────────
+      // ── BOTTOM: state junior EL regimes ──────────────────────────────
+      const stateColors: Record<State, string> = {
+        FL: '#f97316',
+        LA: '#fbbf24',
+        TX: '#38bdf8',
+        GA: '#60a5fa',
+        NC: '#34d399',
+        SC: '#22d3ee',
+        AL: '#a78bfa',
+        MS: '#f472b6',
+      }
+
       bc.setOption({
         ...commonOpt(),
         xAxis: { type: 'category', data: seasons, axisLabel: { color: '#94a3b8', fontSize: 9 } },
@@ -99,19 +111,14 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
           },
           splitLine: { lineStyle: { color: '#1e293b' } },
         },
-        series: [
-          { name: 'Junior EL', type: 'line',
-            data: singleResult.seasons.map(s => +s.globalEl.junior.toFixed(4)),
-            lineStyle: { color: '#fbbf24', width: 1.5 }, symbol: 'none', smooth: false,
-            areaStyle: { color: 'rgba(251,191,36,0.08)' } },
-          { name: 'Mid EL', type: 'line',
-            data: singleResult.seasons.map(s => +s.globalEl.mid.toFixed(4)),
-            lineStyle: { color: '#60a5fa', width: 1.5 }, symbol: 'none', smooth: false,
-            areaStyle: { color: 'rgba(96,165,250,0.08)' } },
-          { name: 'Remote EL', type: 'line',
-            data: singleResult.seasons.map(s => +s.globalEl.remote.toFixed(4)),
-            lineStyle: { color: '#a78bfa', width: 1.5, type: 'dashed' }, symbol: 'none', smooth: false },
-        ],
+        series: COVERED_STATES.map((state) => ({
+          name: `${state} Jr EL`,
+          type: 'line',
+          data: singleResult.seasons.map(s => +(s.stateJuniorEl[state] ?? 0).toFixed(4)),
+          lineStyle: { color: stateColors[state], width: state === 'FL' || state === 'LA' ? 2 : 1.3 },
+          symbol: 'none',
+          smooth: false,
+        })),
       }, true)
 
     } else {

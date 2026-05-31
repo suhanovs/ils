@@ -131,6 +131,8 @@ export interface SeasonRecord {
   marketMultiple: { junior: number; mid: number; remote: number }
   /** Global EL (loss-on-line) at season end (after drift) */
   globalEl: { junior: number; mid: number; remote: number }
+  /** State-specific junior EL used for pricing in this season */
+  stateJuniorEl: Record<State, number>
   /** Industry aggregate TC loss this season, USD millions */
   seasonLossMusd: number
 }

@@ -33,6 +33,8 @@
  */
 
 import type { PricingConfig } from './config'
+import type { State } from './types'
+import { COVERED_STATES } from './types'
 
 export interface MarketMultiple {
   junior: number
@@ -43,12 +45,15 @@ export interface MarketMultiple {
 export interface PricingState {
   multiple: MarketMultiple
   elLol:    MarketMultiple  // global EL, drifts up on hits
+  stateJuniorEl: Record<State, number>
 }
 
 /**
  * Initialize pricing state from config.
  */
 export function initPricingState(cfg: PricingConfig): PricingState {
+  const stateJuniorEl = {} as Record<State, number>
+  for (const s of COVERED_STATES) stateJuniorEl[s] = stateJuniorElBounds(s).low
   return {
     multiple: { ...cfg.initMultiple },
     elLol: {
@@ -56,6 +61,7 @@ export function initPricingState(cfg: PricingConfig): PricingState {
       mid:    cfg.elLolMid,
       remote: cfg.elLolRemote,
     },
+    stateJuniorEl,
   }
 }
 
@@ -71,6 +77,7 @@ export function advancePricingState(
   state:          PricingState,
   seasonLossMusd: number,
   prevSeasonLossMusd: number,
+  hitStates: Set<State>,
   cfg:            PricingConfig
 ): PricingState {
   const lossGb = seasonLossMusd / 1000 // millions -> billions
@@ -104,6 +111,22 @@ export function advancePricingState(
     state.multiple.remote  = Math.max(state.multiple.remote,  cfg.corridorRemote[0])
   }
 
+  // Per-state junior EL regime update:
+  // - If state had any event damage this season, reset to high bracket
+  // - Else ratchet down toward low bracket
+  for (const s of COVERED_STATES) {
+    const b = stateJuniorElBounds(s)
+    if (hitStates.has(s)) {
+      state.stateJuniorEl[s] = b.high
+    } else {
+      state.stateJuniorEl[s] = Math.max(b.low, state.stateJuniorEl[s] - b.stepDown)
+    }
+  }
+
+  // Keep a global junior EL view for legacy stats/panels (mean across states)
+  const sum = COVERED_STATES.reduce((acc, s) => acc + state.stateJuniorEl[s], 0)
+  state.elLol.junior = sum / COVERED_STATES.length
+
   return state
 }
 
@@ -114,6 +137,7 @@ export function clonePricingState(s: PricingState): PricingState {
   return {
     multiple: { ...s.multiple },
     elLol:    { ...s.elLol },
+    stateJuniorEl: { ...s.stateJuniorEl },
   }
 }
 
@@ -134,4 +158,10 @@ export function expectedNoLossReturn(
 
 function clamp(val: number, corridor: [number, number]): number {
   return Math.min(corridor[1], Math.max(corridor[0], val))
+}
+
+function stateJuniorElBounds(state: State): { high: number; low: number; stepDown: number } {
+  if (state === 'FL') return { high: 0.50, low: 0.30, stepDown: 0.10 }
+  if (state === 'LA') return { high: 0.40, low: 0.20, stepDown: 0.05 }
+  return { high: 0.30, low: 0.10, stepDown: 0.05 }
 }

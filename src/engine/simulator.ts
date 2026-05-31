@@ -79,7 +79,11 @@ export function runPath(
     const { availableCapital, cashKept } = decideDeployment(liquidWealth, trapped, cfg.recycling)
 
     // ── 3. Build towers for this season ───────────────────────────────────
-    const marketState = { multiple: { ...pricingState.multiple }, elLol: { ...pricingState.elLol } }
+    const marketState = {
+      multiple: { ...pricingState.multiple },
+      elLol: { ...pricingState.elLol },
+      stateJuniorEl: { ...pricingState.stateJuniorEl },
+    }
     const allLayers: Layer[] = []
     const towers = new Map<State, Layer[]>()
 
@@ -148,7 +152,14 @@ export function runPath(
     // Snapshot rates BEFORE advancing — these are what was actually written
     const writtenMultiple = { ...pricingState.multiple }
     const writtenElLol    = { ...pricingState.elLol }
-    advancePricingState(pricingState, seasonLossMusd, prevSeasonLossMusd, cfg.pricing)
+    const hitStates = new Set<State>()
+    for (const ev of events) {
+      for (const split of ev.stateSplits) {
+        if (split.weight > 0) hitStates.add(split.state)
+      }
+    }
+
+    advancePricingState(pricingState, seasonLossMusd, prevSeasonLossMusd, hitStates, cfg.pricing)
     prevSeasonLossMusd = seasonLossMusd
 
     // ── 10. Record ────────────────────────────────────────────────────────
@@ -164,6 +175,7 @@ export function runPath(
       released:       released,
       marketMultiple: writtenMultiple,   // rates WRITTEN this season
       globalEl:       writtenElLol,      // EL USED this season (pre-drift)
+      stateJuniorEl:  { ...marketState.stateJuniorEl },
       seasonLossMusd,
     }
     seasons.push(record)
@@ -334,6 +346,7 @@ function emptySeasonRecord(season: number, equity: number, ps: PricingState): Se
     totalPremium: 0, totalInterest: 0, confirmedLoss: 0,
     newlyTrapped: 0, released: 0,
     marketMultiple: { ...ps.multiple }, globalEl: { ...ps.elLol },
+    stateJuniorEl: { ...ps.stateJuniorEl },
     seasonLossMusd: 0,
   }
 }

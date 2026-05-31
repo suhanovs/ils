@@ -28,12 +28,13 @@
 import { uniform } from './prng'
 import type { Rng } from './prng'
 import type { SeverityConfig, PricingConfig } from './config'
-import type { Cedent, Layer, LayerTier } from './types'
+import type { Cedent, Layer, LayerTier, State } from './types'
 
 /** Current market state passed in from the pricing cycle module */
 export interface MarketState {
   multiple: { junior: number; mid: number; remote: number }
   elLol:    { junior: number; mid: number; remote: number }
+  stateJuniorEl: Record<State, number>
 }
 
 /**
@@ -107,7 +108,9 @@ function makeLayer(
   // Instead: EL is a stated actuarial input (5%/2%/1% by tier, configurable),
   // which drifts upward permanently after each loss season.  This matches how
   // cedents actually present loss-on-line to reinsurers.
-  const elLol = market.elLol[tier]
+  const elLol = tier === 'junior'
+    ? market.stateJuniorEl[cedent.state]
+    : market.elLol[tier]
 
   // ROL corridor: [multMin, multMax] are MULTIPLES of EL (e.g. 1.5–3.0×).
   // ROL = elLol × multiple, clamped so the multiple stays within the corridor.
