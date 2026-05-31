@@ -99,7 +99,7 @@ export default function App() {
             {bundle.meta.coveredStates.join('/')} · EM-DAT {bundle.meta.rolYears[0]}–{bundle.meta.rolYears[1]}
           </span>
           <a
-            href="https://github.com/suhanovs/ils#readme"
+            href="https://github.com/suhanovs/ils/blob/main/README.md"
             target="_blank"
             rel="noreferrer"
             className="text-slate-400 hover:text-blue-300 underline underline-offset-2"
