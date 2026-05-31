@@ -59,17 +59,13 @@ export function buildPortfolio(
   const nJuniorTarget = Math.max(1, Math.round(N * juniorFraction))
   const nMidTarget    = Math.max(0, N - nJuniorTarget)
 
-  // Junior: maximize return by taking highest multiple first.
-  // Keep a random tie-break so equal-multiple layers are not deterministic.
-  juniorPool.sort((a, b) => {
-    const d = b.multiple - a.multiple
-    if (Math.abs(d) > 1e-9) return d
-    return rng() - 0.5
-  })
+  // Junior + mid: waterfall by economics first, random only as tie-break.
+  // Economics proxy = higher ROL (equivalently higher expected carry at equal loss terms).
+  juniorPool.sort((a, b) => compareByEconomics(a.rol, b.rol, rng))
+  midPool.sort((a, b) => compareByEconomics(a.rol, b.rol, rng))
 
-  // Mid: still randomized selection.
   const selectedJunior = pickTopTier(juniorPool, nJuniorTarget)
-  const selectedMid    = pickRandomTier(midPool, nMidTarget)
+  const selectedMid    = pickTopTier(midPool, nMidTarget)
 
   const selectedLayers = [...selectedJunior, ...selectedMid].slice(0, N)
   if (selectedLayers.length === 0) return []
@@ -103,14 +99,15 @@ export function buildPortfolio(
 /**
  * Pick up to target layers from a shuffled pool.
  */
-function pickRandomTier(pool: Layer[], target: number): Layer[] {
+function pickTopTier(pool: Layer[], target: number): Layer[] {
   if (target <= 0) return []
   return pool.slice(0, target)
 }
 
-function pickTopTier(pool: Layer[], target: number): Layer[] {
-  if (target <= 0) return []
-  return pool.slice(0, target)
+function compareByEconomics(aRol: number, bRol: number, rng: Rng): number {
+  const d = bRol - aRol
+  if (Math.abs(d) > 1e-9) return d
+  return rng() - 0.5
 }
 
 /** Fisher-Yates shuffle in place */
