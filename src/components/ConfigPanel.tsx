@@ -185,19 +185,9 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
           <NumInput value={pr.initMultiple.remote} min={1} max={15} step={0.1} disabled={d}
             onChange={(v) => onChange({ pricing: { ...pr, initMultiple: { ...pr.initMultiple, remote: v } } })} />
         </Row>
-        <div className="label mt-2 mb-1">Baseline EL (loss-on-line)</div>
-        <Row label="Junior EL %">
-          <NumInput value={pr.elLolJunior * 100} min={0.5} max={40} step={0.5} disabled={d}
-            onChange={(v) => onChange({ pricing: { ...pr, elLolJunior: v / 100 } })} />
-        </Row>
-        <Row label="Mid EL %">
-          <NumInput value={pr.elLolMid * 100} min={0.1} max={15} step={0.1} disabled={d}
-            onChange={(v) => onChange({ pricing: { ...pr, elLolMid: v / 100 } })} />
-        </Row>
-        <Row label="Remote EL %">
-          <NumInput value={pr.elLolRemote * 100} min={0.1} max={8} step={0.1} disabled={d}
-            onChange={(v) => onChange({ pricing: { ...pr, elLolRemote: v / 100 } })} />
-        </Row>
+        <div className="text-slate-600 text-xs px-1 pb-1">
+          EL is state-dynamic in code (junior + mid). Remote layers are not written.
+        </div>
         <div className="label mt-2 mb-1">Cycle dynamics</div>
         <Row label="Cycle sensitivity">
           <NumInput value={pr.cycleSensitivity} min={0} max={2} step={0.05} disabled={d}

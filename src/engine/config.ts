@@ -90,16 +90,6 @@ export interface PricingConfig {
   cycleNormBn: number
   /** Geometric decay toward base multiple per quiet year */
   decayFactor: number
-  /**
-   * Baseline EL loss-on-line per tier.
-   * Junior = 15%: layers at ~1-in-10 attachment with 50–70% expected fill on hit.
-   *               At 2.5–3.5× multiple → ROL 37–52% → speculative, high-return.
-   * Mid    = 6%:  layers at ~1-in-20 attachment → ROL 15–33% at 2.5–5.5× multiple.
-   * Remote = 2%:  NOT written by portfolio (tier filter), kept for tower display.
-   */
-  elLolJunior: number
-  elLolMid:    number
-  elLolRemote: number
   /** Permanent EL drift per loss season (climate ratchet) */
   elDriftPerHit: number
 }
@@ -230,9 +220,6 @@ export const DEFAULT_CONFIG: SimConfig = {
     cycleNormBn: 35,
     // Faster softening: market normalises in ~4–5 quiet years.
     decayFactor: 0.70,
-    elLolJunior: 0.40,   // 40% -> ~50-60% ROL under new guardrails
-    elLolMid:    0.06,   // 6%  → ROL 15–33%
-    elLolRemote: 0.02,   // 2%  (reference only; remote layers are not written)
     // Keep EL static by default; cycle effects come from multiples.
     elDriftPerHit: 0.0,
   },

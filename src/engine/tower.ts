@@ -35,6 +35,7 @@ export interface MarketState {
   multiple: { junior: number; mid: number; remote: number }
   elLol:    { junior: number; mid: number; remote: number }
   stateJuniorEl: Record<State, number>
+  stateMidEl: Record<State, number>
 }
 
 /**
@@ -97,7 +98,7 @@ function makeLayer(
   const attachMusd = attachFrac * cedent.pml100Musd
   const limitMusd  = limitFrac  * cedent.pml100Musd
 
-  // PRICING: use the globally-drifted market EL directly from the pricing cycle.
+  // PRICING: use state-dynamic EL for junior/mid from pricingCycle.
   //
   // We deliberately do NOT compute EL from the fitted lognormal EP curve here.
   // The EP curve (fitted via fitLognormal) is useful for verifying return-period
@@ -105,12 +106,12 @@ function makeLayer(
   // produces unstable EL integrals when the tail is heavy (σ ≫ 1): E[X] can
   // exceed PML_100 by orders of magnitude, causing EL/limit → 100% and ROL blow-up.
   //
-  // Instead: EL is a stated actuarial input (5%/2%/1% by tier, configurable),
-  // which drifts upward permanently after each loss season.  This matches how
-  // cedents actually present loss-on-line to reinsurers.
+  // Remote is kept as a global reference only (remote layers are not written).
   const elLol = tier === 'junior'
     ? market.stateJuniorEl[cedent.state]
-    : market.elLol[tier]
+    : tier === 'mid'
+      ? market.stateMidEl[cedent.state]
+      : market.elLol[tier]
 
   // ROL corridor: [multMin, multMax] are MULTIPLES of EL (e.g. 1.5–3.0×).
   // ROL = elLol × multiple, clamped so the multiple stays within the corridor.

@@ -133,6 +133,8 @@ export interface SeasonRecord {
   globalEl: { junior: number; mid: number; remote: number }
   /** State-specific junior EL used for pricing in this season */
   stateJuniorEl: Record<State, number>
+  /** State-specific mid EL used for pricing in this season */
+  stateMidEl: Record<State, number>
   /** Industry aggregate TC loss this season, USD millions */
   seasonLossMusd: number
 }

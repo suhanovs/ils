@@ -83,6 +83,7 @@ export function runPath(
       multiple: { ...pricingState.multiple },
       elLol: { ...pricingState.elLol },
       stateJuniorEl: { ...pricingState.stateJuniorEl },
+      stateMidEl: { ...pricingState.stateMidEl },
     }
     const allLayers: Layer[] = []
     const towers = new Map<State, Layer[]>()
@@ -176,6 +177,7 @@ export function runPath(
       marketMultiple: writtenMultiple,   // rates WRITTEN this season
       globalEl:       writtenElLol,      // EL USED this season (pre-drift)
       stateJuniorEl:  { ...marketState.stateJuniorEl },
+      stateMidEl:     { ...marketState.stateMidEl },
       seasonLossMusd,
     }
     seasons.push(record)
@@ -347,6 +349,7 @@ function emptySeasonRecord(season: number, equity: number, ps: PricingState): Se
     newlyTrapped: 0, released: 0,
     marketMultiple: { ...ps.multiple }, globalEl: { ...ps.elLol },
     stateJuniorEl: { ...ps.stateJuniorEl },
+    stateMidEl: { ...ps.stateMidEl },
     seasonLossMusd: 0,
   }
 }

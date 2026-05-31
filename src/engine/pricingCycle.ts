@@ -46,6 +46,7 @@ export interface PricingState {
   multiple: MarketMultiple
   elLol:    MarketMultiple  // global EL, drifts up on hits
   stateJuniorEl: Record<State, number>
+  stateMidEl: Record<State, number>
 }
 
 /**
@@ -53,15 +54,22 @@ export interface PricingState {
  */
 export function initPricingState(cfg: PricingConfig): PricingState {
   const stateJuniorEl = {} as Record<State, number>
-  for (const s of COVERED_STATES) stateJuniorEl[s] = stateJuniorElBounds(s).low
+  const stateMidEl = {} as Record<State, number>
+  for (const s of COVERED_STATES) {
+    stateJuniorEl[s] = stateJuniorElBounds(s).low
+    stateMidEl[s] = stateMidElBounds(s).start
+  }
+  const jrMean = COVERED_STATES.reduce((acc, s) => acc + stateJuniorEl[s], 0) / COVERED_STATES.length
+  const midMean = COVERED_STATES.reduce((acc, s) => acc + stateMidEl[s], 0) / COVERED_STATES.length
   return {
     multiple: { ...cfg.initMultiple },
     elLol: {
-      junior: cfg.elLolJunior,
-      mid:    cfg.elLolMid,
-      remote: cfg.elLolRemote,
+      junior: jrMean,
+      mid:    midMean,
+      remote: 0.02,
     },
     stateJuniorEl,
+    stateMidEl,
   }
 }
 
@@ -111,21 +119,26 @@ export function advancePricingState(
     state.multiple.remote  = Math.max(state.multiple.remote,  cfg.corridorRemote[0])
   }
 
-  // Per-state junior EL regime update:
+  // Per-state junior/mid EL regime update:
   // - If state had any event damage this season, reset to high bracket
   // - Else ratchet down toward low bracket
   for (const s of COVERED_STATES) {
-    const b = stateJuniorElBounds(s)
+    const bJ = stateJuniorElBounds(s)
+    const bM = stateMidElBounds(s)
     if (hitStates.has(s)) {
-      state.stateJuniorEl[s] = b.high
+      state.stateJuniorEl[s] = bJ.high
+      state.stateMidEl[s] = bM.high
     } else {
-      state.stateJuniorEl[s] = Math.max(b.low, state.stateJuniorEl[s] - b.stepDown)
+      state.stateJuniorEl[s] = Math.max(bJ.low, state.stateJuniorEl[s] - bJ.stepDown)
+      state.stateMidEl[s] = Math.max(bM.low, state.stateMidEl[s] - bM.stepDown)
     }
   }
 
-  // Keep a global junior EL view for legacy stats/panels (mean across states)
-  const sum = COVERED_STATES.reduce((acc, s) => acc + state.stateJuniorEl[s], 0)
-  state.elLol.junior = sum / COVERED_STATES.length
+  // Keep global EL views for legacy stats/panels (means across states)
+  const sumJ = COVERED_STATES.reduce((acc, s) => acc + state.stateJuniorEl[s], 0)
+  const sumM = COVERED_STATES.reduce((acc, s) => acc + state.stateMidEl[s], 0)
+  state.elLol.junior = sumJ / COVERED_STATES.length
+  state.elLol.mid = sumM / COVERED_STATES.length
 
   return state
 }
@@ -138,6 +151,7 @@ export function clonePricingState(s: PricingState): PricingState {
     multiple: { ...s.multiple },
     elLol:    { ...s.elLol },
     stateJuniorEl: { ...s.stateJuniorEl },
+    stateMidEl: { ...s.stateMidEl },
   }
 }
 
@@ -164,4 +178,10 @@ function stateJuniorElBounds(state: State): { high: number; low: number; stepDow
   if (state === 'FL') return { high: 0.50, low: 0.30, stepDown: 0.10 }
   if (state === 'LA') return { high: 0.40, low: 0.20, stepDown: 0.05 }
   return { high: 0.30, low: 0.10, stepDown: 0.05 }
+}
+
+function stateMidElBounds(state: State): { high: number; start: number; low: number; stepDown: number } {
+  if (state === 'FL' || state === 'LA') return { high: 0.15, start: 0.10, low: 0.08, stepDown: 0.02 }
+  if (state === 'NC' || state === 'SC' || state === 'GA') return { high: 0.10, start: 0.06, low: 0.04, stepDown: 0.02 }
+  return { high: 0.08, start: 0.05, low: 0.02, stepDown: 0.02 }
 }
