@@ -229,7 +229,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     juniorFraction: 0.75,  // ~75% juniors, ~25% mid, 0% remote
   },
   capital: {
-    initialCapitalMusd: 10,
+    initialCapitalMusd: 1,
     // Single rate: risk-free rate = collateral yield = interest on T-bill trust.
     riskFreeRate: 0.045,
     trappingPeriodSeasons: 3,
@@ -239,7 +239,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     redeploymentFraction: 1.0,
   },
   simulation: {
-    nSeasons: 20,
+    nSeasons: 10,
     seed: 0,   // 0 = random seed each run
     ruinThresholdFraction: 0.10,
     nMCRuns: 10000,
