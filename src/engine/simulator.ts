@@ -9,7 +9,7 @@
  *   1. Release matured trapped positions → add to liquid equity.
  *   2. Decide deployment (recycling module).
  *   3. Build cedent EP curves + XOL towers (severity + tower modules).
- *   4. Construct portfolio — sticky layers first (portfolio module).
+ *   4. Construct portfolio (randomized layer selection; portfolio module).
  *   5. Record collateral posted, premium received.
  *   6. Draw TC event count (frequency module).
  *   7. Sample events, flow losses up towers (eventLoss module).
@@ -56,7 +56,6 @@ export function runPath(
   let trapped:         TrappedPosition[] = []
   let pricingState:    PricingState      = initPricingState(cfg.pricing)
   let coxState:        CoxState          = 1   // start Neutral
-  let stickyLayerIds:  Set<string>       = new Set()
   let equity                             = liquidWealth  // for ruin check
 
   const ruinThreshold  = cfg.capital.initialCapitalMusd * cfg.simulation.ruinThresholdFraction
@@ -91,7 +90,7 @@ export function runPath(
     }
 
     // ── 4. Build portfolio ─────────────────────────────────────────────────
-    const deals = buildPortfolio(rng, allLayers, stickyLayerIds, availableCapital, cfg)
+    const deals = buildPortfolio(rng, allLayers, availableCapital, cfg)
     if (deals.length === 0) {
       // No capital to deploy — just hold cash
       liquidWealth = liquidWealth * (1 + cfg.capital.riskFreeRate)
@@ -140,13 +139,6 @@ export function runPath(
     liquidWealth  = computeLiquidReturn(cashKept, settlement, 0, cfg.capital.riskFreeRate)
     const trappedValue = trapped.reduce((a, p) => a + p.amountMusd, 0)
     equity        = liquidWealth + trappedValue
-
-    // Track which layers were hit (for sticky logic next season)
-    stickyLayerIds = new Set(
-      settlement.dealRecords
-        .filter((r) => r.lossFraction > 0)
-        .map((r) => r.deal.layer.id)
-    )
 
     // ── 9b. Advance pricing cycle (AFTER recording the season's rates) ────
     // The multiple used THIS season is captured now; the updated multiple

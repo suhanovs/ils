@@ -11,7 +11,6 @@ export interface SimState {
   progress:       number
   singleResult:   PathResult | null
   noTrapResult:   PathResult | null   // same seed, trappingPeriodSeasons=0
-  noStickyResult: PathResult | null   // same seed, stickyLayers=false
   mcResult:       MCResult | null
   error:          string | null
 }
@@ -19,7 +18,7 @@ export interface SimState {
 export function useSimulation(emdatPool: EMDATEvent[]) {
   const [state, setState] = useState<SimState>({
     mode: 'single', running: false, progress: 0,
-    singleResult: null, noTrapResult: null, noStickyResult: null,
+    singleResult: null, noTrapResult: null,
     mcResult: null, error: null,
   })
   const workerRef = useRef<Worker | null>(null)
@@ -40,7 +39,6 @@ export function useSimulation(emdatPool: EMDATEvent[]) {
           ...s, running: false, progress: 100,
           singleResult:   e.data.main,
           noTrapResult:   e.data.noTrap   ?? null,
-          noStickyResult: e.data.noSticky ?? null,
         }))
       } else if (type === 'mcProgress') {
         setState(s => ({ ...s, progress: Math.round((e.data.completed / e.data.total) * 100) }))
@@ -54,14 +52,14 @@ export function useSimulation(emdatPool: EMDATEvent[]) {
     return () => w.terminate()
   }, [])
 
-  const runSingle = useCallback((cfg: SimConfig, compareNoTrap: boolean, compareNoSticky: boolean) => {
+  const runSingle = useCallback((cfg: SimConfig, compareNoTrap: boolean) => {
     setState(s => ({
       ...s, mode: 'single', running: true, progress: 0, error: null,
-      noTrapResult: null, noStickyResult: null,
+      noTrapResult: null,
     }))
     workerRef.current?.postMessage({
       type: 'runComparisons', config: cfg, emdatPool,
-      compareNoTrap, compareNoSticky,
+      compareNoTrap,
     })
   }, [emdatPool])
 

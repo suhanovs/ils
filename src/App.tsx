@@ -20,7 +20,6 @@ const LOG_H   = 270   // px — Season Log          (+50%)
 export default function App() {
   const [config, setConfig]               = useState<SimConfig>(DEFAULT_CONFIG)
   const [compareNoTrap,   setNoTrap]      = useState(false)
-  const [compareNoSticky, setNoSticky]    = useState(false)
 
   const emdatPool = useMemo(() => bundle.events, [])
   const { state, runSingle, runMC, setMode } = useSimulation(emdatPool)
@@ -29,7 +28,7 @@ export default function App() {
     setConfig(c => ({ ...c, ...patch }))
   }, [])
 
-  const handleRunSingle = () => { setMode('single'); runSingle(config, compareNoTrap, compareNoSticky) }
+  const handleRunSingle = () => { setMode('single'); runSingle(config, compareNoTrap) }
   const handleRunMC     = () => { setMode('mc');     runMC(config) }
 
   const isSingle   = state.mode === 'single'
@@ -77,11 +76,6 @@ export default function App() {
                 checked={compareNoTrap} onChange={e => setNoTrap(e.target.checked)} />
               <span className="text-lime-400">No-trap</span>
             </label>
-            <label className="flex items-center gap-1 cursor-pointer select-none">
-              <input type="checkbox" className="w-3 h-3 accent-purple-500"
-                checked={compareNoSticky} onChange={e => setNoSticky(e.target.checked)} />
-              <span className="text-purple-400">No-sticky</span>
-            </label>
           </div>
         )}
 
@@ -124,19 +118,17 @@ export default function App() {
                 {isSingle && (
                   <span className="text-xs flex gap-2">
                     {compareNoTrap   && <span className="text-lime-400">── no-trap</span>}
-                    {compareNoSticky && <span className="text-purple-400">·· no-sticky</span>}
                   </span>
                 )}
               </div>
               <div className="flex-1 min-h-0">
-                <EquityCurve
-                  singleResult={state.singleResult}
-                  noTrapResult={compareNoTrap   ? state.noTrapResult   : null}
-                  noStickyResult={compareNoSticky ? state.noStickyResult : null}
-                  mcResult={state.mcResult}
-                  mode={state.mode}
-                  config={config}
-                />
+                  <EquityCurve
+                    singleResult={state.singleResult}
+                    noTrapResult={compareNoTrap   ? state.noTrapResult   : null}
+                    mcResult={state.mcResult}
+                    mode={state.mode}
+                    config={config}
+                  />
               </div>
             </div>
 

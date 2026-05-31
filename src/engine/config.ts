@@ -116,11 +116,6 @@ export interface PortfolioConfig {
    * Remote layers are NEVER written.
    */
   juniorFraction: number
-  /**
-   * Sticky layers: layers that saw any loss last season are re-written first.
-   * Ensures the investor stays exposed to layers in loss development.
-   */
-  stickyLayers: boolean
 }
 
 // ── Capital & cashflow ────────────────────────────────────────────────────
@@ -244,7 +239,6 @@ export const DEFAULT_CONFIG: SimConfig = {
     nDealsRange: [8, 14],
     maxDealWeight: 0.18,
     juniorFraction: 0.75,  // ~75% juniors, ~25% mid, 0% remote
-    stickyLayers: true,
   },
   capital: {
     initialCapitalMusd: 10,

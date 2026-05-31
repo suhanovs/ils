@@ -271,10 +271,6 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
         <div className="text-slate-500 text-xs px-1 pb-1">
           Remainder = mid. Remote layers are never written.
         </div>
-        <Row label="Sticky layers">
-          <CheckInput value={po.stickyLayers} disabled={d}
-            onChange={(v) => onChange({ portfolio: { ...po, stickyLayers: v } })} />
-        </Row>
       </Section>
 
       {/* ── SEVERITY / EXPOSURE ── */}

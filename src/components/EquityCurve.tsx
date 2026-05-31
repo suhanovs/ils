@@ -6,13 +6,12 @@ import type { SimConfig } from '../engine/config'
 interface Props {
   singleResult:   PathResult | null
   noTrapResult:   PathResult | null
-  noStickyResult: PathResult | null
   mcResult:       MCResult   | null
   mode:           'single' | 'mc'
   config:         SimConfig
 }
 
-export function EquityCurve({ singleResult, noTrapResult, noStickyResult, mcResult, mode, config }: Props) {
+export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef     = useRef<echarts.ECharts | null>(null)
 
@@ -98,15 +97,6 @@ export function EquityCurve({ singleResult, noTrapResult, noStickyResult, mcResu
           symbol: 'none', smooth: false,
         })
       }
-      if (noStickyResult) {
-        series.push({
-          type: 'line', name: 'No-sticky',
-          data: [initial, ...noStickyResult.seasons.map(s => s.equity)],
-          lineStyle: { color: '#c084fc', type: 'dotted', width: 1.5 },
-          symbol: 'none', smooth: false,
-        })
-      }
-
       // Main equity line on top
       series.push({
         type: 'line', name: 'Equity',
@@ -174,7 +164,7 @@ export function EquityCurve({ singleResult, noTrapResult, noStickyResult, mcResu
     }
 
     chart.setOption(baseOption, true)
-  }, [singleResult, noTrapResult, noStickyResult, mcResult, mode, config])
+  }, [singleResult, noTrapResult, mcResult, mode, config])
 
   return <div ref={containerRef} className="w-full h-full min-h-[340px]" />
 }

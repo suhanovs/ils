@@ -4,12 +4,12 @@
  * Messages in:
  *   { type: 'runSingle',      config, emdatPool, seed? }
  *   { type: 'runComparisons', config, emdatPool, seed,
- *           compareNoTrap: boolean, compareNoSticky: boolean }
+ *           compareNoTrap: boolean }
  *   { type: 'runMC',          config, emdatPool }
  *
  * Messages out:
  *   { type: 'singleResult',      result: PathResult }
- *   { type: 'comparisonResult',  main, noTrap?, noSticky? }
+ *   { type: 'comparisonResult',  main, noTrap? }
  *   { type: 'mcProgress',        completed, total }
  *   { type: 'mcResult',          result: MCResult }
  *   { type: 'error',             message: string }
@@ -26,7 +26,6 @@ self.onmessage = (e: MessageEvent) => {
     emdatPool:        EMDATEvent[]
     seed?:            number
     compareNoTrap?:   boolean
-    compareNoSticky?: boolean
   }
 
   try {
@@ -48,16 +47,7 @@ self.onmessage = (e: MessageEvent) => {
           )
         : null
 
-      // Optional: same seed, sticky layers disabled
-      const noSticky = msg.compareNoSticky
-        ? runPath(
-            { ...msg.config, portfolio: { ...msg.config.portfolio, stickyLayers: false } },
-            msg.emdatPool,
-            usedSeed
-          )
-        : null
-
-      self.postMessage({ type: 'comparisonResult', main, noTrap, noSticky })
+      self.postMessage({ type: 'comparisonResult', main, noTrap })
 
     } else if (msg.type === 'runMC') {
       const result = runMonteCarlo(msg.config, msg.emdatPool, ({ completed, total }) => {

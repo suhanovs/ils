@@ -2,7 +2,7 @@
  * Portfolio construction — building the investor's book each season.
  *
  * Separation of concerns: selects which layers to write, how much of each,
- * and which deals are "sticky" from the prior season.
+ * and how much is allocated to each selected deal.
  *
  * Tier rules (per user specification):
  *   - Junior layers: primary target (~75% of deals, configurable).
@@ -11,12 +11,6 @@
  *     very high multiples but require large capital commitments and can trap
  *     collateral for 36 months on rare but catastrophic events.  Speculative
  *     junior economics are preferred because diversification handles frequency.
- *
- * Sticky layers:
- *   Layers that saw any loss last season are re-written first.  This ensures
- *   the investor stays exposed during tail-loss development (the layer may
- *   have further development in the 36-month trap window, and re-underwriting
- *   it at hardened pricing is the right ILS manager behaviour).
  *
  * Capital sizing:
  *   available_capital × deal_weight = investor_capital per deal.
@@ -34,20 +28,18 @@ import type { Layer, Deal, LayerTier } from './types'
  *
  * @param rng              Seeded RNG
  * @param allLayers        All layers available this season (all tiers, all cedents)
- * @param stickyLayerIds   Layer IDs that must be re-written (hit last season)
  * @param availableCapital Total capital to deploy (USD millions)
  * @param cfg              SimConfig
  */
 export function buildPortfolio(
   rng:              Rng,
   allLayers:        Layer[],
-  stickyLayerIds:   Set<string>,
   availableCapital: number,
   cfg:              SimConfig
 ): Deal[] {
   if (availableCapital <= 0 || allLayers.length === 0) return []
 
-  const { nDealsRange, maxDealWeight, juniorFraction, stickyLayers } = cfg.portfolio
+  const { nDealsRange, maxDealWeight, juniorFraction } = cfg.portfolio
   const N = uniformInt(rng, nDealsRange[0], nDealsRange[1])
 
   // ── Step 1: separate layers by tier, excluding remote ─────────────────
@@ -63,30 +55,21 @@ export function buildPortfolio(
   shuffle(rng, juniorPool)
   shuffle(rng, midPool)
 
-  // ── Step 2: collect sticky layers (keep regardless of tier) ───────────
-  const stickyJunior: Layer[] = []
-  const stickyMid:    Layer[] = []
-
-  if (stickyLayers) {
-    for (const l of juniorPool) if (stickyLayerIds.has(l.id)) stickyJunior.push(l)
-    for (const l of midPool)    if (stickyLayerIds.has(l.id)) stickyMid.push(l)
-  }
-
-  // ── Step 3: target deal counts by tier ────────────────────────────────
+  // ── Step 2: target deal counts by tier ────────────────────────────────
   const nJuniorTarget = Math.max(1, Math.round(N * juniorFraction))
   const nMidTarget    = Math.max(0, N - nJuniorTarget)
 
-  // Fill sticky first, then random
-  const selectedJunior = fillTier(rng, juniorPool, stickyJunior, nJuniorTarget)
-  const selectedMid    = fillTier(rng, midPool,    stickyMid,    nMidTarget)
+  // Always randomize selection each season (remote excluded)
+  const selectedJunior = pickRandomTier(juniorPool, nJuniorTarget)
+  const selectedMid    = pickRandomTier(midPool, nMidTarget)
 
   const selectedLayers = [...selectedJunior, ...selectedMid].slice(0, N)
   if (selectedLayers.length === 0) return []
 
-  // ── Step 4: random weights ────────────────────────────────────────────
+  // ── Step 3: random weights ────────────────────────────────────────────
   const weights = dirichletWeights(rng, selectedLayers.length, maxDealWeight)
 
-  // ── Step 5: build Deal objects ────────────────────────────────────────
+  // ── Step 4: build Deal objects ────────────────────────────────────────
   return selectedLayers.map((layer, i) => {
     const weight          = weights[i]
     const investorCapital = availableCapital * weight
@@ -110,22 +93,11 @@ export function buildPortfolio(
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /**
- * Fill a deal slot for a tier: sticky layers first, then random from pool.
+ * Pick up to target layers from a shuffled pool.
  */
-function fillTier(
-  rng:     Rng,
-  pool:    Layer[],
-  sticky:  Layer[],
-  target:  number
-): Layer[] {
+function pickRandomTier(pool: Layer[], target: number): Layer[] {
   if (target <= 0) return []
-  const result: Layer[] = [...sticky.slice(0, target)]
-  const used = new Set(result.map(l => l.id))
-  for (const l of pool) {
-    if (result.length >= target) break
-    if (!used.has(l.id)) { result.push(l); used.add(l.id) }
-  }
-  return result
+  return pool.slice(0, target)
 }
 
 /** Fisher-Yates shuffle in place */
