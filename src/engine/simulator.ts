@@ -59,6 +59,7 @@ export function runPath(
   let pricingState:    PricingState      = initPricingState(cfg.pricing)
   let coxState:        CoxState          = 1   // start Neutral
   let prevSeasonLossMusd                = 0
+  const maxStateLossSeen = new Map<State, number>()
   let equity                             = safeWealth + ilsLiquid // for ruin check
   let ilsRuined                          = false
 
@@ -178,13 +179,36 @@ export function runPath(
     const writtenMultiple = { ...pricingState.multiple }
     const writtenElLol    = { ...pricingState.elLol }
     const hitStates = new Set<State>()
+    const halfDownStates = new Set<State>()
+    const stateLossBySeason = new Map<State, number>()
     for (const ev of events) {
       for (const split of ev.stateSplits) {
-        if (split.weight > 0) hitStates.add(split.state)
+        if (split.weight <= 0) continue
+        const prev = stateLossBySeason.get(split.state) ?? 0
+        stateLossBySeason.set(split.state, prev + ev.industryLossMusd * split.weight)
       }
     }
 
-    advancePricingState(pricingState, seasonLossMusd, prevSeasonLossMusd, hitStates, cfg.pricing)
+    for (const state of COVERED_STATES) {
+      const lossMusd = stateLossBySeason.get(state) ?? 0
+      const priorMax = maxStateLossSeen.get(state) ?? 0
+
+      if (lossMusd <= 0) continue
+
+      if (priorMax > 0 && lossMusd < 0.10 * priorMax) {
+        // Minor state event relative to historical state max:
+        // do not ratchet up EL/ROL; apply half-step ratchet-down instead.
+        halfDownStates.add(state)
+      } else {
+        hitStates.add(state)
+      }
+
+      if (lossMusd > priorMax) {
+        maxStateLossSeen.set(state, lossMusd)
+      }
+    }
+
+    advancePricingState(pricingState, seasonLossMusd, prevSeasonLossMusd, hitStates, halfDownStates, cfg.pricing)
     prevSeasonLossMusd = seasonLossMusd
 
     // ── 11. Record ────────────────────────────────────────────────────────

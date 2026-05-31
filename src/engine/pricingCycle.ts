@@ -86,6 +86,7 @@ export function advancePricingState(
   seasonLossMusd: number,
   prevSeasonLossMusd: number,
   hitStates: Set<State>,
+  halfDownStates: Set<State>,
   cfg:            PricingConfig
 ): PricingState {
   const lossGb = seasonLossMusd / 1000 // millions -> billions
@@ -128,6 +129,9 @@ export function advancePricingState(
     if (hitStates.has(s)) {
       state.stateJuniorEl[s] = Math.min(bJ.high, state.stateJuniorEl[s] + bJ.stepDown)
       state.stateMidEl[s] = Math.min(bM.high, state.stateMidEl[s] + bM.stepDown)
+    } else if (halfDownStates.has(s)) {
+      state.stateJuniorEl[s] = Math.max(bJ.low, state.stateJuniorEl[s] - 0.5 * bJ.stepDown)
+      state.stateMidEl[s] = Math.max(bM.low, state.stateMidEl[s] - 0.5 * bM.stepDown)
     } else {
       state.stateJuniorEl[s] = Math.max(bJ.low, state.stateJuniorEl[s] - bJ.stepDown)
       state.stateMidEl[s] = Math.max(bM.low, state.stateMidEl[s] - bM.stepDown)
