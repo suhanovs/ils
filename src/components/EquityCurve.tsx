@@ -75,11 +75,13 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
 
     const ruinSeries = {
       type: 'line', name: 'Ruin', data: seasons.map(() => yVal(ruin)),
+      color: '#dc2626',
       lineStyle: { color: '#dc2626', type: 'dashed', width: 1 },
       symbol: 'none', z: 0,
     }
     const initialSeries = {
       type: 'line', name: 'Initial', data: seasons.map(() => yVal(initial)),
+      color: '#334155',
       lineStyle: { color: '#334155', type: 'dotted', width: 1 },
       symbol: 'none', z: 0,
     }
@@ -101,6 +103,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
         series.push({
           type: 'line', name: 'No-trap',
           data: [initial, ...noTrapResult.seasons.map(s => yVal(s.equity))],
+          color: '#a3e635',
           lineStyle: { color: '#a3e635', type: 'dashed', width: 1.5 },
           symbol: 'none', smooth: false,
         })
@@ -109,6 +112,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
       series.push({
         type: 'line', name: 'Equity',
         data: equityData,
+        color: '#38bdf8',
         lineStyle: { color: '#38bdf8', width: 2.5 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
@@ -136,6 +140,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
           type: 'line',
           name: `Worst ${i + 1}`,
           data: wp.equity.map(yVal),
+          color: worstColors[i] ?? '#ef4444',
           lineStyle: { color: worstColors[i] ?? '#ef4444', width: 1.2, type: 'dashed', opacity: 0.7 },
           symbol: 'none', smooth: true,
         })
@@ -153,6 +158,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
         series.push({
           type: 'line', name: f.name,
           data: [initial, ...f.data.map(yVal)],
+          color: f.color,
           lineStyle: { color: f.color, width: f.opacity > 0.7 ? 2 : 1, opacity: f.opacity },
           symbol: 'none', smooth: true,
         })
@@ -166,6 +172,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
         {
           type: 'line', name: 'Equity',
           data: [initial, ...Array(nS).fill(null)],
+          color: '#38bdf8',
           lineStyle: { color: '#38bdf8', width: 2 }, symbol: 'circle',
         },
       ]
