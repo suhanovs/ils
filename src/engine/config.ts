@@ -190,18 +190,26 @@ export const DEFAULT_CONFIG: SimConfig = {
     ],
   },
   severity: {
-    // Calibrated so junior attachment (0.60 × pml20 ≈ 0.18 of pml100) is
-    // breached by ~1-in-10 to 1-in-15 EM-DAT events per state.
-    // E.g. FL: Katrina ($99B × ~27% FL weight) / 120 000 ≈ 0.22 → exceeds 0.18 ✓
+    // Calibrated so that ~15–20% of deal-seasons have loss activity.
+    // This gives per-path Sharpe ≈ 1.4–1.7 (target).
+    //
+    // Rule: lower values → more EM-DAT events exceed attachment → higher loss frequency.
+    // Tune UP to reduce loss frequency (conservative); DOWN to increase (aggressive).
+    //
+    // Anchor: FL statePML100 ≈ 65 000 makes Katrina ($99B × 45% FL weight = $44.5B)
+    // exceed the remote exhaustion (~0.58 × 65 000 = $37.7B), and Andrew/Irma ($39B
+    // × 70% = $27B) exceed the junior attachment (0.18 × 65 000 = $11.7B). This gives
+    // ~4–5 FL events / 24 that breach junior attachment ≈ 17–21% per FL event,
+    // or ~10–12% annual probability per FL junior deal → Sharpe ≈ 1.5 blended.
     statePML100Musd: {
-      FL: 120000,
-      TX: 100000,
-      LA:  60000,
-      NC:  35000,
-      SC:  22000,
-      GA:  28000,
-      MS:  18000,
-      AL:  18000,
+      FL:  65000,
+      TX:  55000,
+      LA:  35000,
+      NC:  20000,
+      SC:  13000,
+      GA:  16000,
+      MS:  11000,
+      AL:  11000,
     },
     marketShareFraction: 0.02,
     exposureScaleRange: [0.5, 2.0],

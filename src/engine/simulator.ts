@@ -128,8 +128,13 @@ export function runPath(
         .map((r) => r.deal.layer.id)
     )
 
-    // ── 9b. Advance pricing cycle ──────────────────────────────────────────
+    // ── 9b. Advance pricing cycle (AFTER recording the season's rates) ────
+    // The multiple used THIS season is captured now; the updated multiple
+    // is what cedents and investors will see NEXT season.
     const seasonLossMusd = events.reduce((sum, ev) => sum + ev.industryLossMusd, 0)
+    // Snapshot rates BEFORE advancing — these are what was actually written
+    const writtenMultiple = { ...pricingState.multiple }
+    const writtenElLol    = { ...pricingState.elLol }
     advancePricingState(pricingState, seasonLossMusd, cfg.pricing)
 
     // ── 10. Record ────────────────────────────────────────────────────────
@@ -143,8 +148,8 @@ export function runPath(
       confirmedLoss:  settlement.confirmedLoss,
       newlyTrapped:   settlement.newlyTrapped,
       released:       released,
-      marketMultiple: { ...pricingState.multiple },
-      globalEl:       { ...pricingState.elLol },
+      marketMultiple: writtenMultiple,   // rates WRITTEN this season
+      globalEl:       writtenElLol,      // EL USED this season (pre-drift)
       seasonLossMusd,
     }
     seasons.push(record)
@@ -174,13 +179,14 @@ export interface MCProgress {
 }
 
 export function runMonteCarlo(
-  cfg:      SimConfig,
+  cfg:       SimConfig,
   emdatPool: EMDATEvent[],
   onProgress?: (p: MCProgress) => void
 ): MCResult {
-  const nRuns   = cfg.simulation.nMCRuns
+  const nRuns    = cfg.simulation.nMCRuns
   const nSeasons = cfg.simulation.nSeasons
-  const baseSeed = cfg.simulation.seed || 12345
+  const baseSeed = cfg.simulation.seed || Math.floor(Math.random() * 1e9)
+  const rfr      = cfg.capital.riskFreeRate
 
   // Per-season equity arrays for percentile computation
   const equityMatrix: number[][] = Array.from({ length: nSeasons }, () => [])
@@ -188,13 +194,20 @@ export function runMonteCarlo(
   const cagrs:            number[] = []
   let nRuined = 0
 
-  // Annual returns for Sharpe
-  const annualReturns: number[] = []
+  // Per-path Sharpe collection.
+  // Sharpe = mean(r_t − rfr) / std(r_t − rfr)  where r_t = annual return on total equity.
+  // We compute one Sharpe per path, then take the MEDIAN across all paths.
+  // This correctly captures the within-path return variability, not the
+  // pooled cross-path variability (which inflates Sharpe by smoothing losses).
+  const perPathSharpes: number[] = []
+
+  // Pooled annual returns for the return histogram
+  const allAnnualReturns: number[] = []
 
   const REPORT_EVERY = Math.max(1, Math.floor(nRuns / 100))
 
   for (let run = 0; run < nRuns; run++) {
-    const seed   = baseSeed + run * 1000003 // deterministic, spread out
+    const seed   = baseSeed + run * 1000003
     const result = runPath(cfg, emdatPool, seed)
 
     nRuined += result.ruined ? 1 : 0
@@ -205,11 +218,23 @@ export function runMonteCarlo(
       equityMatrix[s].push(result.seasons[s]?.equity ?? 0)
     }
 
-    // Collect annual returns for Sharpe
+    // ── Per-path Sharpe ────────────────────────────────────────────────
+    // Collect excess annual returns (total equity change minus RFR hurdle)
+    const excessReturns: number[] = []
     let prevEq = cfg.capital.initialCapitalMusd
     for (const season of result.seasons) {
-      if (prevEq > 0) annualReturns.push((season.equity - prevEq) / prevEq)
-      prevEq = season.equity
+      if (prevEq > 1e-6) {
+        const r = (season.equity - prevEq) / prevEq
+        excessReturns.push(r - rfr)
+      }
+      prevEq = Math.max(season.equity, 1e-6)
+      allAnnualReturns.push((season.equity - cfg.capital.initialCapitalMusd) /
+                            cfg.capital.initialCapitalMusd) // for histogram
+    }
+    if (excessReturns.length >= 3) {
+      const sh = sharpeRatio(excessReturns)
+      // Ignore degenerate paths (zero variance = all no-loss, skews median up)
+      if (isFinite(sh) && sh < 20) perPathSharpes.push(sh)
     }
 
     if (onProgress && (run + 1) % REPORT_EVERY === 0) {
@@ -217,9 +242,10 @@ export function runMonteCarlo(
     }
   }
 
-  // Sort each season's array for percentile extraction
+  // Sort for percentile extraction
   for (const arr of equityMatrix) arr.sort((a, b) => a - b)
   terminalEquities.sort((a, b) => a - b)
+  perPathSharpes.sort((a, b) => a - b)
 
   return {
     nRuns,
@@ -236,8 +262,11 @@ export function runMonteCarlo(
     terminalP95:    pct(terminalEquities, 95),
     cagrMean:       mean(cagrs.filter((c) => c > -1)),
     cagrP50:        pct([...cagrs].sort((a, b) => a - b), 50),
-    sharpe:         sharpeRatio(annualReturns),
-    returnBuckets:  histogram(annualReturns, 40),
+    // Median per-path Sharpe — represents the typical investor experience.
+    // Higher than target? → Losses are too rare; lower statePML100Musd.
+    // Lower than target?  → Losses too frequent or ROL too low.
+    sharpe:         pct(perPathSharpes, 50),
+    returnBuckets:  histogram(allAnnualReturns, 40),
   }
 }
 
