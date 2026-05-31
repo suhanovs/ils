@@ -9,9 +9,10 @@ interface Props {
   mcResult:       MCResult   | null
   mode:           'single' | 'mc'
   config:         SimConfig
+  logScale:       boolean
 }
 
-export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config }: Props) {
+export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config, logScale }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef     = useRef<echarts.ECharts | null>(null)
 
@@ -31,6 +32,8 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
     const ruin    = initial * config.simulation.ruinThresholdFraction
     const nS      = config.simulation.nSeasons
     const seasons = Array.from({ length: nS + 1 }, (_, i) => i)
+    const EPS     = 0.01
+    const yVal    = (v: number) => logScale ? Math.max(v, EPS) : v
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const baseOption: any = {
@@ -46,7 +49,8 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
           for (const p of params) {
             const v = Array.isArray(p.value) ? p.value[1] : p.value
             if (v == null) continue
-            lines.push(`${p.marker}${p.seriesName}: <b>$${Number(v).toFixed(2)}M</b>`)
+            const shown = logScale && Number(v) <= EPS ? 0 : Number(v)
+            lines.push(`${p.marker}${p.seriesName}: <b>$${shown.toFixed(2)}M</b>`)
           }
           return lines.join('<br/>')
         },
@@ -58,26 +62,30 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
         axisLabel: { color: '#94a3b8' },
       },
       yAxis: {
-        type: 'value', name: 'Equity ($M)', nameLocation: 'middle', nameGap: 50,
+        type: logScale ? 'log' : 'value', name: 'Equity ($M)', nameLocation: 'middle', nameGap: 50,
+        min: logScale ? EPS : undefined,
         axisLine: { lineStyle: { color: '#475569' } },
-        axisLabel: { color: '#94a3b8', formatter: (v: number) => `$${v.toFixed(0)}M` },
+        axisLabel: {
+          color: '#94a3b8',
+          formatter: (v: number) => `$${(logScale && v <= EPS ? 0 : v).toFixed(0)}M`,
+        },
         splitLine: { lineStyle: { color: '#1e293b' } },
       },
     }
 
     const ruinSeries = {
-      type: 'line', name: 'Ruin', data: seasons.map(() => ruin),
+      type: 'line', name: 'Ruin', data: seasons.map(() => yVal(ruin)),
       lineStyle: { color: '#dc2626', type: 'dashed', width: 1 },
       symbol: 'none', z: 0,
     }
     const initialSeries = {
-      type: 'line', name: 'Initial', data: seasons.map(() => initial),
+      type: 'line', name: 'Initial', data: seasons.map(() => yVal(initial)),
       lineStyle: { color: '#334155', type: 'dotted', width: 1 },
       symbol: 'none', z: 0,
     }
 
     if (mode === 'single' && singleResult) {
-      const equityData = [initial, ...singleResult.seasons.map(s => s.equity)]
+      const equityData = [initial, ...singleResult.seasons.map(s => yVal(s.equity))]
       const eventSeasons = singleResult.seasons.filter(s => s.events.length > 0).map(s => s.season)
       const marks = eventSeasons.map(s => ({
         name: `ev-${s}`, coord: [s, singleResult.seasons[s - 1].equity],
@@ -92,7 +100,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
       if (noTrapResult) {
         series.push({
           type: 'line', name: 'No-trap',
-          data: [initial, ...noTrapResult.seasons.map(s => s.equity)],
+          data: [initial, ...noTrapResult.seasons.map(s => yVal(s.equity))],
           lineStyle: { color: '#a3e635', type: 'dashed', width: 1.5 },
           symbol: 'none', smooth: false,
         })
@@ -127,7 +135,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
         series.push({
           type: 'line',
           name: `Worst ${i + 1}`,
-          data: wp.equity,
+          data: wp.equity.map(yVal),
           lineStyle: { color: worstColors[i] ?? '#ef4444', width: 1.2, type: 'dashed', opacity: 0.7 },
           symbol: 'none', smooth: true,
         })
@@ -144,7 +152,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
       for (const f of fan) {
         series.push({
           type: 'line', name: f.name,
-          data: [initial, ...f.data],
+          data: [initial, ...f.data.map(yVal)],
           lineStyle: { color: f.color, width: f.opacity > 0.7 ? 2 : 1, opacity: f.opacity },
           symbol: 'none', smooth: true,
         })
@@ -164,7 +172,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
     }
 
     chart.setOption(baseOption, true)
-  }, [singleResult, noTrapResult, mcResult, mode, config])
+  }, [singleResult, noTrapResult, mcResult, mode, config, logScale])
 
   return <div ref={containerRef} className="w-full h-full min-h-[340px]" />
 }

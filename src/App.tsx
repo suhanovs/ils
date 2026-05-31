@@ -20,6 +20,7 @@ const LOG_H   = 270   // px — Season Log          (+50%)
 export default function App() {
   const [config, setConfig]               = useState<SimConfig>(DEFAULT_CONFIG)
   const [compareNoTrap,   setNoTrap]      = useState(false)
+  const [logScale,        setLogScale]    = useState(false)
 
   const emdatPool = useMemo(() => bundle.events, [])
   const { state, runSingle, runMC, setMode } = useSimulation(emdatPool)
@@ -76,6 +77,11 @@ export default function App() {
                 checked={compareNoTrap} onChange={e => setNoTrap(e.target.checked)} />
               <span className="text-lime-400">No-trap</span>
             </label>
+            <label className="flex items-center gap-1 cursor-pointer select-none">
+              <input type="checkbox" className="w-3 h-3 accent-cyan-500"
+                checked={logScale} onChange={e => setLogScale(e.target.checked)} />
+              <span className="text-cyan-400">Log equity axis</span>
+            </label>
           </div>
         )}
 
@@ -128,6 +134,7 @@ export default function App() {
                     mcResult={state.mcResult}
                     mode={state.mode}
                     config={config}
+                    logScale={logScale}
                   />
               </div>
             </div>
