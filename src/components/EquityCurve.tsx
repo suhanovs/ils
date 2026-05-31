@@ -45,12 +45,27 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         formatter: (params: any) => {
           if (!Array.isArray(params) || params.length === 0) return ''
+          const seasonIdx = Number(params[0].axisValue ?? 0)
           const lines = [`<b>Season ${params[0].axisValueLabel ?? params[0].axisValue}</b>`]
           for (const p of params) {
+            if (p.seriesName === 'Ruin' || p.seriesName === 'Initial') continue
             const v = Array.isArray(p.value) ? p.value[1] : p.value
             if (v == null) continue
             const shown = logScale && Number(v) <= EPS ? 0 : Number(v)
             lines.push(`${p.marker}${p.seriesName}: <b>$${shown.toFixed(2)}M</b>`)
+          }
+
+          if (mode === 'single' && singleResult && seasonIdx > 0) {
+            const rec = singleResult.seasons[seasonIdx - 1]
+            if (rec) {
+              const pct = (v: number) => `${(v * 100).toFixed(2)}%`
+              lines.push('')
+              lines.push(`Net worth growth (cash-on-cash): <b>${pct(rec.cashOnCashGrowth)}</b>`)
+              lines.push(`ILS deployment: <b>$${rec.ilsDeployedMusd.toFixed(2)}M</b> (${pct(rec.ilsDeployedPct)})`)
+              lines.push(`RFR outside ILS: <b>$${rec.rfrOutsideMusd.toFixed(2)}M</b> (${pct(rec.rfrOutsidePct)})`)
+              lines.push(`RFR on ILS collateral: <b>$${rec.rfrCollateralMusd.toFixed(2)}M</b> (${pct(rec.rfrCollateralPct)})`)
+              lines.push(`Underwriting return: <b>$${rec.underwritingReturnMusd.toFixed(2)}M</b> (${pct(rec.underwritingReturnPct)})`)
+            }
           }
           return lines.join('<br/>')
         },

@@ -137,6 +137,20 @@ export interface SeasonRecord {
   stateMidEl: Record<State, number>
   /** Industry aggregate TC loss this season, USD millions */
   seasonLossMusd: number
+  /** Start-of-season net worth growth for this season */
+  cashOnCashGrowth: number
+  /** ILS deployment at season start */
+  ilsDeployedMusd: number
+  ilsDeployedPct: number
+  /** RFR earned on safe (outside-ILS) holdings */
+  rfrOutsideMusd: number
+  rfrOutsidePct: number
+  /** RFR earned on ILS collateral (clean + trapped compounding) */
+  rfrCollateralMusd: number
+  rfrCollateralPct: number
+  /** Residual underwriting return (net of RFR components) */
+  underwritingReturnMusd: number
+  underwritingReturnPct: number
 }
 
 // ── Trapped collateral ─────────────────────────────────────────────────────

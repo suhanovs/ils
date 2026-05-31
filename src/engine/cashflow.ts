@@ -160,24 +160,30 @@ export function processTrappedPositions(
   trapped:       TrappedPosition[],
   currentSeason: number,
   cfg:           CapitalConfig
-): { released: number; stillTrapped: TrappedPosition[] } {
+): { released: number; stillTrapped: TrappedPosition[]; trappedInterest: number; releasedInterest: number } {
   let released = 0
+  let trappedInterest = 0
+  let releasedInterest = 0
   const stillTrapped: TrappedPosition[] = []
 
   for (const pos of trapped) {
     if (pos.releaseSeason <= currentSeason) {
       // Mature: apply final year of interest, then release
-      released += pos.amountMusd * (1 + cfg.riskFreeRate)
+      const interest = pos.amountMusd * cfg.riskFreeRate
+      releasedInterest += interest
+      released += pos.amountMusd + interest
     } else {
       // Not yet mature: compound for another year
+      const interest = pos.amountMusd * cfg.riskFreeRate
+      trappedInterest += interest
       stillTrapped.push({
         ...pos,
-        amountMusd: pos.amountMusd * (1 + cfg.riskFreeRate),
+        amountMusd: pos.amountMusd + interest,
       })
     }
   }
 
-  return { released, stillTrapped }
+  return { released, stillTrapped, trappedInterest, releasedInterest }
 }
 
 // ── Liquid equity calculation ──────────────────────────────────────────────

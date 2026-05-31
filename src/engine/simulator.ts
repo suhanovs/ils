@@ -75,16 +75,16 @@ export function runPath(
 
   for (let s = 1; s <= cfg.simulation.nSeasons; s++) {
     // ── 1. Release matured traps → add to ILS liquid ─────────────────────
-    const { released, stillTrapped } = processTrappedPositions(trapped, s, cfg.capital)
+    const { released, stillTrapped, trappedInterest, releasedInterest } = processTrappedPositions(trapped, s, cfg.capital)
     trapped       = stillTrapped
     ilsLiquid += released
 
     // ── 2. Rebalance target ILS allocation from total net worth ───────────
-    const trappedValue = trapped.reduce((a, p) => a + p.amountMusd, 0)
-    const ilsEquityStart = ilsLiquid + trappedValue
-    const totalNetWorth = safeWealth + ilsEquityStart
+    const trappedValueStart = trapped.reduce((a, p) => a + p.amountMusd, 0)
+    const ilsEquityStart = ilsLiquid + trappedValueStart
+    const totalNetWorthStart = safeWealth + ilsEquityStart
     const canDeploy = cfg.capital.deployAfterRuin || !ilsRuined
-    const targetIlsEquity = canDeploy ? totalNetWorth * cfg.capital.deploymentFraction : 0
+    const targetIlsEquity = canDeploy ? totalNetWorthStart * cfg.capital.deploymentFraction : 0
 
     if (ilsEquityStart < targetIlsEquity) {
       const topUp = Math.min(safeWealth, targetIlsEquity - ilsEquityStart)
@@ -98,6 +98,7 @@ export function runPath(
 
     // ── 3. Deploy all current ILS liquid into seasonal deals ───────────────
     const availableCapital = Math.max(0, ilsLiquid)
+    const safeStartForSeason = safeWealth
 
     // ── 4. Build towers for this season ───────────────────────────────────
     const marketState = {
@@ -122,10 +123,16 @@ export function runPath(
       // No deals written: park ILS liquid into safe bucket for the season.
       safeWealth += ilsLiquid
       ilsLiquid = 0
-      safeWealth *= (1 + cfg.capital.riskFreeRate)
+      const rfrOutsideMusd = safeWealth * cfg.capital.riskFreeRate
+      safeWealth += rfrOutsideMusd
       const trappedValueNow = trapped.reduce((a, p) => a + p.amountMusd, 0)
       equity = safeWealth + trappedValueNow
-      seasons.push(emptySeasonRecord(s, equity, pricingState))
+      seasons.push(emptySeasonRecord(s, equity, pricingState, {
+        totalNetWorthStart,
+        availableCapital,
+        rfrOutsideMusd,
+        rfrCollateralMusd: trappedInterest + releasedInterest,
+      }))
       continue
     }
 
@@ -164,7 +171,8 @@ export function runPath(
     // ── 10. Compute end-of-season buckets and equity ───────────────────────
     // ILS liquid = only clean-deal returns; partial/IBNR remain trapped.
     ilsLiquid = computeLiquidReturn(0, settlement, 0, cfg.capital.riskFreeRate)
-    safeWealth *= (1 + cfg.capital.riskFreeRate)
+    const rfrOutsideMusd = safeStartForSeason * cfg.capital.riskFreeRate
+    safeWealth += rfrOutsideMusd
     const trappedValueNow = trapped.reduce((a, p) => a + p.amountMusd, 0)
     const ilsEquityEnd = ilsLiquid + trappedValueNow
     equity = safeWealth + ilsEquityEnd
@@ -227,6 +235,19 @@ export function runPath(
       stateJuniorEl:  { ...marketState.stateJuniorEl },
       stateMidEl:     { ...marketState.stateMidEl },
       seasonLossMusd,
+      cashOnCashGrowth: totalNetWorthStart > 0 ? (equity - totalNetWorthStart) / totalNetWorthStart : 0,
+      ilsDeployedMusd: availableCapital,
+      ilsDeployedPct: totalNetWorthStart > 0 ? availableCapital / totalNetWorthStart : 0,
+      rfrOutsideMusd,
+      rfrOutsidePct: totalNetWorthStart > 0 ? rfrOutsideMusd / totalNetWorthStart : 0,
+      rfrCollateralMusd: settlement.totalInterest + trappedInterest + releasedInterest,
+      rfrCollateralPct: totalNetWorthStart > 0
+        ? (settlement.totalInterest + trappedInterest + releasedInterest) / totalNetWorthStart
+        : 0,
+      underwritingReturnMusd: (equity - totalNetWorthStart) - rfrOutsideMusd - (settlement.totalInterest + trappedInterest + releasedInterest),
+      underwritingReturnPct: totalNetWorthStart > 0
+        ? ((equity - totalNetWorthStart) - rfrOutsideMusd - (settlement.totalInterest + trappedInterest + releasedInterest)) / totalNetWorthStart
+        : 0,
     }
     seasons.push(record)
 
@@ -385,7 +406,18 @@ function histogram(data: number[], nBuckets: number): { lo: number; hi: number; 
   return buckets
 }
 
-function emptySeasonRecord(season: number, equity: number, ps: PricingState): SeasonRecord {
+function emptySeasonRecord(
+  season: number,
+  equity: number,
+  ps: PricingState,
+  extras?: { totalNetWorthStart: number; availableCapital: number; rfrOutsideMusd: number; rfrCollateralMusd: number }
+): SeasonRecord {
+  const totalNetWorthStart = extras?.totalNetWorthStart ?? equity
+  const availableCapital = extras?.availableCapital ?? 0
+  const rfrOutsideMusd = extras?.rfrOutsideMusd ?? 0
+  const rfrCollateralMusd = extras?.rfrCollateralMusd ?? 0
+  const growth = totalNetWorthStart > 0 ? (equity - totalNetWorthStart) / totalNetWorthStart : 0
+  const uwMusd = (equity - totalNetWorthStart) - rfrOutsideMusd - rfrCollateralMusd
   return {
     season, equity, events: [], deals: [],
     totalPremium: 0, totalInterest: 0, confirmedLoss: 0,
@@ -394,5 +426,14 @@ function emptySeasonRecord(season: number, equity: number, ps: PricingState): Se
     stateJuniorEl: { ...ps.stateJuniorEl },
     stateMidEl: { ...ps.stateMidEl },
     seasonLossMusd: 0,
+    cashOnCashGrowth: growth,
+    ilsDeployedMusd: availableCapital,
+    ilsDeployedPct: totalNetWorthStart > 0 ? availableCapital / totalNetWorthStart : 0,
+    rfrOutsideMusd,
+    rfrOutsidePct: totalNetWorthStart > 0 ? rfrOutsideMusd / totalNetWorthStart : 0,
+    rfrCollateralMusd,
+    rfrCollateralPct: totalNetWorthStart > 0 ? rfrCollateralMusd / totalNetWorthStart : 0,
+    underwritingReturnMusd: uwMusd,
+    underwritingReturnPct: totalNetWorthStart > 0 ? uwMusd / totalNetWorthStart : 0,
   }
 }
