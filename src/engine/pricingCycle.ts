@@ -120,14 +120,14 @@ export function advancePricingState(
   }
 
   // Per-state junior/mid EL regime update:
-  // - If state had any event damage this season, reset to high bracket
-  // - Else ratchet down toward low bracket
+  // - If state had any event damage this season, ratchet up by step toward high
+  // - Else ratchet down by step toward low
   for (const s of COVERED_STATES) {
     const bJ = stateJuniorElBounds(s)
     const bM = stateMidElBounds(s)
     if (hitStates.has(s)) {
-      state.stateJuniorEl[s] = bJ.high
-      state.stateMidEl[s] = bM.high
+      state.stateJuniorEl[s] = Math.min(bJ.high, state.stateJuniorEl[s] + bJ.stepDown)
+      state.stateMidEl[s] = Math.min(bM.high, state.stateMidEl[s] + bM.stepDown)
     } else {
       state.stateJuniorEl[s] = Math.max(bJ.low, state.stateJuniorEl[s] - bJ.stepDown)
       state.stateMidEl[s] = Math.max(bM.low, state.stateMidEl[s] - bM.stepDown)
