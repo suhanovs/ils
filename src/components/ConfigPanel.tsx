@@ -43,14 +43,6 @@ function SelectInput<T extends string>({ value, options, onChange, disabled }:
   )
 }
 
-function CheckInput({ value, onChange, disabled }:
-  { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <input type="checkbox" className="w-4 h-4 accent-blue-500" checked={value} disabled={disabled}
-      onChange={(e) => onChange(e.target.checked)} />
-  )
-}
-
 // ── Section wrapper ────────────────────────────────────────────────────────
 
 function Section({ title, color = 'blue', children }: { title: string; color?: string; children: React.ReactNode }) {
@@ -181,10 +173,6 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
           <NumInput value={pr.initMultiple.mid} min={1} max={12} step={0.1} disabled={d}
             onChange={(v) => onChange({ pricing: { ...pr, initMultiple: { ...pr.initMultiple, mid: v } } })} />
         </Row>
-        <Row label="Remote ×">
-          <NumInput value={pr.initMultiple.remote} min={1} max={15} step={0.1} disabled={d}
-            onChange={(v) => onChange({ pricing: { ...pr, initMultiple: { ...pr.initMultiple, remote: v } } })} />
-        </Row>
         <div className="text-slate-600 text-xs px-1 pb-1">
           EL is state-dynamic in code (junior + mid). Remote layers are not written.
         </div>
@@ -201,22 +189,9 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
           <NumInput value={pr.decayFactor} min={0.5} max={0.99} step={0.01} disabled={d}
             onChange={(v) => onChange({ pricing: { ...pr, decayFactor: v } })} />
         </Row>
-        {/* EL drift — permanent secular creep after each loss season */}
-        <Row label="EL drift enabled">
-          <CheckInput value={pr.elDriftPerHit > 0} disabled={d}
-            onChange={(v) => onChange({ pricing: { ...pr, elDriftPerHit: v ? 0.003 : 0 } })} />
-        </Row>
-        {pr.elDriftPerHit > 0 && (
-          <Row label="Drift/hit %">
-            <NumInput value={pr.elDriftPerHit * 100} min={0.01} max={2} step={0.05} disabled={d}
-              onChange={(v) => onChange({ pricing: { ...pr, elDriftPerHit: v / 100 } })} />
-          </Row>
-        )}
-        {pr.elDriftPerHit <= 0 && (
-          <div className="text-slate-600 text-xs px-1 pb-1">
-            EL stays constant across seasons (no climate ratchet).
-          </div>
-        )}
+        <div className="text-slate-600 text-xs px-1 pb-1">
+          EL drift is disabled (static EL regime).
+        </div>
       </Section>
 
       {/* ── PORTFOLIO ── */}
