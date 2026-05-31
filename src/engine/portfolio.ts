@@ -64,7 +64,7 @@ export function buildPortfolio(
   juniorPool.sort((a, b) => compareByEconomics(a.rol, b.rol, rng))
   midPool.sort((a, b) => compareByEconomics(a.rol, b.rol, rng))
 
-  const selectedJunior = pickTopTier(juniorPool, nJuniorTarget)
+  const selectedJunior = pickJuniorWithFloridaFirst(juniorPool, nJuniorTarget)
   const selectedMid    = pickTopTier(midPool, nMidTarget)
 
   const selectedLayers = [...selectedJunior, ...selectedMid].slice(0, N)
@@ -102,6 +102,20 @@ export function buildPortfolio(
 function pickTopTier(pool: Layer[], target: number): Layer[] {
   if (target <= 0) return []
   return pool.slice(0, target)
+}
+
+function pickJuniorWithFloridaFirst(pool: Layer[], target: number): Layer[] {
+  if (target <= 0) return []
+
+  const floridaJunior = pool.find((l) => l.cedent.state === 'FL' && l.tier === 'junior')
+  if (!floridaJunior) return pool.slice(0, target)
+
+  const rest: Layer[] = []
+  for (const l of pool) {
+    if (l.id !== floridaJunior.id) rest.push(l)
+  }
+
+  return [floridaJunior, ...rest].slice(0, target)
 }
 
 function compareByEconomics(aRol: number, bRol: number, rng: Rng): number {
