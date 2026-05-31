@@ -43,10 +43,11 @@ export interface DeploymentDecision {
  * @param cfg           Recycling config
  */
 export function decideDeployment(
-  liquidEquity: number,
+  liquidWealth: number,
   _trapped:     TrappedPosition[],
   cfg:          RecyclingConfig
 ): DeploymentDecision {
+  const liquidEquity = liquidWealth  // alias for clarity
   if (liquidEquity <= 0) {
     return { availableCapital: 0, cashKept: 0 }
   }

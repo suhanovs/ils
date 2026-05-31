@@ -12,20 +12,39 @@
  *   Investor_cap = (1 − ROL) × Limit_share (investor funds the rest)
  *   Trust_total  = Limit_share             (= investor_cap + premium)
  *
- * Interest accrues on the FULL trust (= Limit_share) and is paid to investor.
- *   Interest = Limit_share × collateralYield
+ * Interest accrues on the FULL trust (= Limit_share) and is paid to
+ * the investor regardless of loss outcome (earned on T-bills backing
+ * the trust; spec: "interest is paid on the whole, to the investor").
+ *   Interest = Limit_share × collateralYield   (unconditional)
  *
- * Settlement at season end:
- *   Total loss  (fraction = 1.0): cedent claims Limit_share.
- *                                 Investor loses investor_cap immediately.
- *                                 No trapping (nothing left).
- *   Partial loss (0 < f < 1)    : cedent claims f × Limit_share.
- *                                 Remaining (1−f) × Limit_share is trapped.
- *                                 Released after trappingPeriodSeasons with interest.
- *   No loss      (f = 0)        : Limit_share + interest returned to investor.
+ * Principal settlement at season end:
+ *   Total loss  (fraction = 1.0): trust pays Limit_share to cedent.
+ *                                 Investor recovers zero principal.
+ *   Partial loss (0 < f < 1)    : trust pays f × Limit_share to cedent.
+ *                                 (1−f) × Limit_share is trapped for 36 months.
+ *   No loss     (f = 0)         : Limit_share returned to investor.
  *
- * Returns on investor capital in no-loss year:
- *   return = (premium + interest) / investor_cap = (ROL + yield) / (1 − ROL)
+ * === EQUITY ACCOUNTING ===
+ *
+ * The investor's NET WORTH at season end is:
+ *
+ *   liquid   = cashKept × (1 + riskFreeRate)     — cash that wasn't deployed
+ *            + interestOnAllDeals                 — yield on full collateral (unconditional)
+ *            + returnedPrincipal                  — limitShare for no-loss deals
+ *            + releasedFromPriorTraps             — matured trapped collateral
+ *
+ *   trapped  = sum of (1−f) × limitShare          — partial-loss deals, locked up 36 months
+ *            (already in newTrappedPositions list)
+ *
+ *   total_equity = liquid + sum(trapped.amountMusd)
+ *
+ * Key insight: "totalLoss" (confirmed losses paid to cedents) is a DISPLAY-ONLY
+ * figure. It does NOT enter the equity formula because:
+ *   - For total-loss deals:   investorCapital already left the investor's account
+ *                             when deployed; the deal simply returns $0 to principal.
+ *   - For partial-loss deals: the loss is captured by the reduced trapped principal.
+ * Double-counting occurs if you both (a) exclude the deal from returned principal AND
+ * (b) subtract it again as a loss charge.
  */
 
 import type { CapitalConfig } from './config'
@@ -35,19 +54,24 @@ import type { Deal, TrappedPosition, DealRecord } from './types'
 
 export interface SettlementResult {
   dealRecords:    DealRecord[]
-  totalPremium:   number   // USD m received at start
-  totalInterest:  number   // USD m interest on full collateral
-  totalLoss:      number   // USD m paid to cedents (gone)
-  newlyTrapped:   number   // USD m entering trapping
-  immediateReturn: number  // USD m returned directly (no-loss + total-loss refund-of-none)
+  /** Total interest paid on all collateral (display + included in immediateReturn) */
+  totalInterest:  number
+  /** Total premium received from cedents (display only) */
+  totalPremium:   number
+  /** Dollar losses confirmed to cedents (display only — does NOT enter equity calc) */
+  confirmedLoss:  number
+  /** Cash returned to investor immediately: interest on all + principal of no-loss deals */
+  immediateReturn: number
+  /** Newly trapped collateral from partial-loss deals */
+  newlyTrapped:   number
   newTrappedPositions: TrappedPosition[]
 }
 
 /**
- * Settle all deals in a season.
+ * Settle all deals at season end.
  *
- * @param deals         Portfolio of deals
- * @param lossFractions Map from layerId → loss fraction [0,1]
+ * @param deals         Portfolio of deals this season
+ * @param lossFractions Map layerId → loss fraction ∈ [0, 1]
  * @param currentSeason 1-indexed season number
  * @param cfg           Capital config (yield, trapping period)
  */
@@ -57,21 +81,22 @@ export function settleSeason(
   currentSeason: number,
   cfg:           CapitalConfig
 ): SettlementResult {
-  const dealRecords: DealRecord[]        = []
+  const dealRecords: DealRecord[]              = []
   const newTrappedPositions: TrappedPosition[] = []
-  let totalPremium  = 0
-  let totalInterest = 0
-  let totalLoss     = 0
-  let newlyTrapped  = 0
-  let immediateReturn = 0
+  let totalInterest  = 0
+  let totalPremium   = 0
+  let confirmedLoss  = 0
+  let returnedPrincipal = 0
+  let newlyTrapped   = 0
 
   for (const deal of deals) {
     const lossFraction = lossFractions.get(deal.layer.id) ?? 0
     const lossMusd     = lossFraction * deal.limitShare
     const interest     = deal.limitShare * cfg.collateralYield
 
-    totalPremium  += deal.premium
+    // Interest is paid unconditionally on the full collateral
     totalInterest += interest
+    totalPremium  += deal.premium
 
     const record: DealRecord = {
       deal,
@@ -82,36 +107,39 @@ export function settleSeason(
     dealRecords.push(record)
 
     if (lossFraction >= 1.0) {
-      // TOTAL LOSS: investor loses investor_cap immediately
-      // Premium was received upfront but flows into trust → used to pay cedent
-      // Net: investor_cap is gone; premium and interest are also consumed
-      totalLoss += deal.investorCapital + deal.premium + interest
-      // (We still book interest earned + premium received but it's fully offset by loss)
+      // TOTAL LOSS: trust pays limitShare to cedent; investor recovers no principal.
+      // Interest already counted above (paid regardless).
+      confirmedLoss += deal.limitShare
+
     } else if (lossFraction > 0) {
-      // PARTIAL LOSS: trap remaining collateral
-      const lossTotal      = lossFraction * deal.limitShare
-      const remaining      = deal.limitShare - lossTotal
-      totalLoss           += lossTotal
-      newlyTrapped        += remaining
+      // PARTIAL LOSS: cedent claims f×limitShare; remainder is trapped 36 months.
+      const lossTotal = lossFraction * deal.limitShare
+      const remaining = deal.limitShare - lossTotal
+      confirmedLoss += lossTotal
+      newlyTrapped  += remaining
       newTrappedPositions.push({
         dealId:        deal.id,
         tier:          deal.layer.tier,
         amountMusd:    remaining,
         releaseSeason: currentSeason + cfg.trappingPeriodSeasons,
       })
+
     } else {
-      // NO LOSS: full return + interest
-      immediateReturn += deal.limitShare + interest
+      // NO LOSS: limitShare returned in full.
+      returnedPrincipal += deal.limitShare
     }
   }
 
+  // immediateReturn = interest on ALL deals + principal of no-loss deals
+  const immediateReturn = totalInterest + returnedPrincipal
+
   return {
     dealRecords,
-    totalPremium,
     totalInterest,
-    totalLoss,
-    newlyTrapped,
+    totalPremium,
+    confirmedLoss,
     immediateReturn,
+    newlyTrapped,
     newTrappedPositions,
   }
 }
@@ -119,65 +147,47 @@ export function settleSeason(
 // ── Trapped position management ───────────────────────────────────────────
 
 /**
- * Accrue interest on trapped positions and release any that have matured.
- *
- * Interest compounds annually on the trapped principal.
- * Releases flow back to investor liquid capital.
+ * Release any trapped positions that have matured; keep the rest.
+ * Interest on trapped principal is NOT accrued here — it was paid
+ * unconditionally at settlement time.  The principal is returned as-is.
  */
 export function processTrappedPositions(
   trapped:       TrappedPosition[],
   currentSeason: number,
-  cfg:           CapitalConfig
+  _cfg:          CapitalConfig   // reserved for future per-season interest accrual
 ): { released: number; stillTrapped: TrappedPosition[] } {
   let released = 0
   const stillTrapped: TrappedPosition[] = []
 
   for (const pos of trapped) {
     if (pos.releaseSeason <= currentSeason) {
-      // Matured: release principal + 1 season of interest (interest already tracked above for current)
       released += pos.amountMusd
     } else {
-      // Compound interest on trapped principal
-      const grown = { ...pos, amountMusd: pos.amountMusd * (1 + cfg.collateralYield) }
-      stillTrapped.push(grown)
+      stillTrapped.push(pos)
     }
   }
 
   return { released, stillTrapped }
 }
 
-// ── Investor net-worth calculation ─────────────────────────────────────────
+// ── Liquid equity calculation ──────────────────────────────────────────────
 
 /**
- * Compute investor equity at end of season.
+ * Compute the investor's LIQUID equity at season end.
  *
- *   equity = liquid (uninvested cash earning risk-free)
- *          + sum(trapped_positions.amount)
+ * liquid = cashKept × (1 + riskFreeRate)
+ *        + settlement.immediateReturn   (interest on all + returned principal)
+ *        + released                     (matured trapped collateral)
  *
- * The "deployed" capital has already been converted to either:
- *   - immediateReturn (no-loss deals)
- *   - losses (gone)
- *   - trapped positions
- *
- * @param prevEquity     Equity at start of season (before deployment)
- * @param availableCapital Capital deployed this season
- * @param cashKept       Capital kept as cash (prevEquity − availableCapital)
- * @param settlement     Season settlement results
- * @param released       Amount released from prior-season traps
- * @param riskFreeRate   Rate earned on uninvested cash
+ * IMPORTANT: this is LIQUID equity only.
+ * Total net worth = liquid + sum(allTrappedPositions.amountMusd)
+ * The simulator must add the trapped value to get the equity curve.
  */
-export function computeEquity(
-  prevEquity:       number,
-  availableCapital: number,
-  cashKept:         number,
-  settlement:       SettlementResult,
-  released:         number,
-  riskFreeRate:     number
+export function computeLiquidReturn(
+  cashKept:    number,
+  settlement:  SettlementResult,
+  released:    number,
+  riskFreeRate: number
 ): number {
-  const cashReturn   = cashKept * (1 + riskFreeRate)
-  const dealReturn   = settlement.immediateReturn  // no-loss collateral + interest
-  const lossCharge   = -settlement.totalLoss
-  // Note: trapped is already subtracted (it's in newTrappedPositions, not available)
-  // released comes from prior seasons' trapped positions
-  return cashReturn + dealReturn + lossCharge + released
+  return cashKept * (1 + riskFreeRate) + settlement.immediateReturn + released
 }

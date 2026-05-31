@@ -29,7 +29,6 @@ import { uniform } from './prng'
 import type { Rng } from './prng'
 import type { SeverityConfig, PricingConfig } from './config'
 import type { Cedent, Layer, LayerTier } from './types'
-import { computeLayerElLol } from './severity'
 
 /** Current market state passed in from the pricing cycle module */
 export interface MarketState {
@@ -97,18 +96,25 @@ function makeLayer(
   const attachMusd = attachFrac * cedent.pml100Musd
   const limitMusd  = limitFrac  * cedent.pml100Musd
 
-  // Compute EL from the lognormal EP curve (model-derived EL for this exact layer geometry)
-  // We also apply the market-driven global EL as a minimum (drift ratchet)
-  const curveElLol   = computeLayerElLol(cedent, attachFrac, limitFrac)
-  const globalElLol  = market.elLol[tier]
-  const elLol        = Math.max(curveElLol, globalElLol)
+  // PRICING: use the globally-drifted market EL directly from the pricing cycle.
+  //
+  // We deliberately do NOT compute EL from the fitted lognormal EP curve here.
+  // The EP curve (fitted via fitLognormal) is useful for verifying return-period
+  // attachment points and for plotting the exceedance curve in the UI, but it
+  // produces unstable EL integrals when the tail is heavy (σ ≫ 1): E[X] can
+  // exceed PML_100 by orders of magnitude, causing EL/limit → 100% and ROL blow-up.
+  //
+  // Instead: EL is a stated actuarial input (5%/2%/1% by tier, configurable),
+  // which drifts upward permanently after each loss season.  This matches how
+  // cedents actually present loss-on-line to reinsurers.
+  const elLol = market.elLol[tier]
 
-  const multiple = market.multiple[tier]
-  const rawRol   = elLol * multiple
-
-  // Clamp ROL to the market corridor for this tier
-  const [corridorMin, corridorMax] = tierCorridor(tier, prCfg)
-  const rol = Math.min(corridorMax, Math.max(corridorMin * elLol, rawRol))
+  // ROL corridor: [multMin, multMax] are MULTIPLES of EL (e.g. 1.5–3.0×).
+  // ROL = elLol × multiple, clamped so the multiple stays within the corridor.
+  const [multMin, multMax] = tierCorridor(tier, prCfg)
+  const rawMultiple = market.multiple[tier]
+  const multiple    = Math.min(multMax, Math.max(multMin, rawMultiple))
+  const rol         = Math.min(0.80, elLol * multiple)   // hard cap at 80% ROL
 
   return {
     id,
@@ -120,7 +126,7 @@ function makeLayer(
     limitMusd,
     elLol,
     rol,
-    multiple: rol / Math.max(elLol, 1e-6),
+    multiple,
   }
 }
 

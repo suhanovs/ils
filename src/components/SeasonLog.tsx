@@ -30,7 +30,7 @@ export function SeasonLog({ result }: Props) {
         </thead>
         <tbody>
           {result.seasons.map((s) => {
-            const hasLoss = s.totalLoss > 0
+            const hasLoss = s.confirmedLoss > 0
             return (
               <tr key={s.season}
                 className={`border-t border-slate-700 ${hasLoss ? 'bg-red-950/30' : ''}`}>
@@ -38,8 +38,8 @@ export function SeasonLog({ result }: Props) {
                 <td className="px-2 py-0.5 font-bold text-slate-100">{m(s.equity)}</td>
                 <td className="px-2 py-0.5 text-emerald-400">{m(s.totalPremium)}</td>
                 <td className="px-2 py-0.5 text-blue-400">{m(s.totalInterest)}</td>
-                <td className={`px-2 py-0.5 ${s.totalLoss > 0 ? 'text-red-400 font-bold' : 'text-slate-500'}`}>
-                  {s.totalLoss > 0 ? m(s.totalLoss) : '—'}
+                <td className={`px-2 py-0.5 ${s.confirmedLoss > 0 ? 'text-red-400 font-bold' : 'text-slate-500'}`}>
+                  {s.confirmedLoss > 0 ? m(s.confirmedLoss) : '—'}
                 </td>
                 <td className={`px-2 py-0.5 ${s.newlyTrapped > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
                   {s.newlyTrapped > 0 ? m(s.newlyTrapped) : '—'}

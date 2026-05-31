@@ -25,12 +25,12 @@ import { drawEventCount } from './frequency'
 import type { CoxState } from './frequency'
 import { buildCedent } from './severity'
 import { buildTower } from './tower'
-import { initPricingState, advancePricingState, clonePricingState } from './pricingCycle'
+import { initPricingState, advancePricingState } from './pricingCycle'
 import type { PricingState } from './pricingCycle'
 import { buildEventPool, computeSeasonTowerLosses } from './eventLoss'
 import { buildPortfolio } from './portfolio'
-import { settleSeason, processTrappedPositions, computeEquity } from './cashflow'
-import { decideDeployment, computeLiquidEquity } from './recycling'
+import { settleSeason, processTrappedPositions, computeLiquidReturn } from './cashflow'
+import { decideDeployment } from './recycling'
 import type { SimConfig } from './config'
 import type {
   Cedent, Layer, SeasonRecord, TrappedPosition,
@@ -51,11 +51,13 @@ export function runPath(
   const pool  = buildEventPool(emdatPool)
 
   // Initial state
-  let equity           = cfg.capital.initialCapitalMusd
+  // We track liquid wealth and trapped separately; equity = liquid + trapped.
+  let liquidWealth:    number            = cfg.capital.initialCapitalMusd
   let trapped:         TrappedPosition[] = []
   let pricingState:    PricingState      = initPricingState(cfg.pricing)
   let coxState:        CoxState          = 1   // start Neutral
   let stickyLayerIds:  Set<string>       = new Set()
+  let equity                             = liquidWealth  // for ruin check
 
   const ruinThreshold  = cfg.capital.initialCapitalMusd * cfg.simulation.ruinThresholdFraction
   const seasons:       SeasonRecord[] = []
@@ -68,13 +70,13 @@ export function runPath(
   }
 
   for (let s = 1; s <= cfg.simulation.nSeasons; s++) {
-    // ── 1. Release matured traps ──────────────────────────────────────────
+    // ── 1. Release matured traps → add to liquid ─────────────────────────
     const { released, stillTrapped } = processTrappedPositions(trapped, s, cfg.capital)
-    trapped = stillTrapped
+    trapped       = stillTrapped
+    liquidWealth += released   // matured collateral flows back to liquid
 
-    // ── 2. Compute liquid equity and decide deployment ────────────────────
-    const liquidEquity = computeLiquidEquity(equity + released, trapped)
-    const { availableCapital, cashKept } = decideDeployment(liquidEquity, trapped, cfg.recycling)
+    // ── 2. Decide deployment from current liquid wealth ───────────────────
+    const { availableCapital, cashKept } = decideDeployment(liquidWealth, trapped, cfg.recycling)
 
     // ── 3. Build towers for this season ───────────────────────────────────
     const marketState = { multiple: { ...pricingState.multiple }, elLol: { ...pricingState.elLol } }
@@ -92,7 +94,9 @@ export function runPath(
     const deals = buildPortfolio(rng, allLayers, stickyLayerIds, availableCapital, cfg)
     if (deals.length === 0) {
       // No capital to deploy — just hold cash
-      equity = equity + released + liquidEquity * cfg.capital.riskFreeRate
+      liquidWealth = liquidWealth * (1 + cfg.capital.riskFreeRate)
+      const trappedValue = trapped.reduce((a, p) => a + p.amountMusd, 0)
+      equity = liquidWealth + trappedValue
       seasons.push(emptySeasonRecord(s, equity, pricingState))
       continue
     }
@@ -109,15 +113,13 @@ export function runPath(
     const settlement = settleSeason(deals, layerLossFractions, s, cfg.capital)
     trapped.push(...settlement.newTrappedPositions)
 
-    // ── 9. Compute equity ──────────────────────────────────────────────────
-    equity = computeEquity(
-      equity,
-      availableCapital,
-      cashKept,
-      settlement,
-      released,
-      cfg.capital.riskFreeRate
-    )
+    // ── 9. Compute equity = liquid + trapped ───────────────────────────────
+    //   liquid  = cash kept (earns risk-free) + immediate returns + already-released traps
+    //             Note: `released` was already added to liquidWealth in step 1,
+    //             so here we only process the new season's cashflows.
+    liquidWealth  = computeLiquidReturn(cashKept, settlement, 0, cfg.capital.riskFreeRate)
+    const trappedValue = trapped.reduce((a, p) => a + p.amountMusd, 0)
+    equity        = liquidWealth + trappedValue
 
     // Track which layers were hit (for sticky logic next season)
     stickyLayerIds = new Set(
@@ -138,9 +140,9 @@ export function runPath(
       deals:          settlement.dealRecords,
       totalPremium:   settlement.totalPremium,
       totalInterest:  settlement.totalInterest,
-      totalLoss:      settlement.totalLoss,
+      confirmedLoss:  settlement.confirmedLoss,
       newlyTrapped:   settlement.newlyTrapped,
-      released,
+      released:       released,
       marketMultiple: { ...pricingState.multiple },
       globalEl:       { ...pricingState.elLol },
       seasonLossMusd,
@@ -278,7 +280,7 @@ function histogram(data: number[], nBuckets: number): { lo: number; hi: number; 
 function emptySeasonRecord(season: number, equity: number, ps: PricingState): SeasonRecord {
   return {
     season, equity, events: [], deals: [],
-    totalPremium: 0, totalInterest: 0, totalLoss: 0,
+    totalPremium: 0, totalInterest: 0, confirmedLoss: 0,
     newlyTrapped: 0, released: 0,
     marketMultiple: { ...ps.multiple }, globalEl: { ...ps.elLol },
     seasonLossMusd: 0,

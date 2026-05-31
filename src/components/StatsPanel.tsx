@@ -34,9 +34,9 @@ function SingleStats({ result, config }: { result: PathResult; config: SimConfig
   const n        = config.simulation.nSeasons
 
   const totalPremium  = result.seasons.reduce((s, r) => s + r.totalPremium, 0)
-  const totalLoss     = result.seasons.reduce((s, r) => s + r.totalLoss, 0)
+  const totalLoss     = result.seasons.reduce((s, r) => s + r.confirmedLoss, 0)
   const totalInterest = result.seasons.reduce((s, r) => s + r.totalInterest, 0)
-  const nLossSeasons  = result.seasons.filter((r) => r.totalLoss > 0).length
+  const nLossSeasons  = result.seasons.filter((r) => r.confirmedLoss > 0).length
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">

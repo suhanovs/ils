@@ -109,8 +109,8 @@ export interface SeasonRecord {
   totalPremium: number
   /** Aggregate interest on collateral */
   totalInterest: number
-  /** Total loss paid to cedents (investor share) */
-  totalLoss: number
+  /** Confirmed losses paid to cedents this season (display; does not double-count equity) */
+  confirmedLoss: number
   /** Newly trapped collateral (partial-loss deals), USD millions */
   newlyTrapped: number
   /** Collateral released from prior-season traps */
