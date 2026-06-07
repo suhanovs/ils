@@ -13,15 +13,15 @@ import type { ILSDataBundle } from './data/types'
 
 const bundle = ilsData as ILSDataBundle
 
-// Heights for the two full-width bottom panels (single-run mode)
-const GRID_H  = 315   // px — Layer Status Grid  (+50%)
-const LOG_H   = 270   // px — Season Log          (+50%)
+// Height for the full-width bottom tabbed panel (single-run mode)
+const BOTTOM_H = 315
 
 export default function App() {
   const [config, setConfig]               = useState<SimConfig>(DEFAULT_CONFIG)
   const [compareNoTrap,   setNoTrap]      = useState(false)
   const [logScale,        setLogScale]    = useState(false)
   const [lightMode,       setLightMode]   = useState(false)
+  const [bottomTab,       setBottomTab]   = useState<'layers' | 'log'>('layers')
 
   const emdatPool = useMemo(() => bundle.events, [])
   const { state, runSingle, runMC, setMode } = useSimulation(emdatPool)
@@ -45,7 +45,7 @@ export default function App() {
   const hasResult  = isSingle ? !!state.singleResult : !!state.mcResult
 
   // How many px the two bottom panels take (only in single-run mode when result exists)
-  const bottomH = (isSingle && hasResult) ? GRID_H + LOG_H + 8 : 0
+  const bottomH = (isSingle && hasResult) ? BOTTOM_H + 8 : 0
 
   return (
     <div className={`flex flex-col h-screen overflow-hidden ${lightMode ? 'light' : ''}`}>
@@ -224,26 +224,34 @@ export default function App() {
           {/* ── Bottom panels: full width, only in single-run mode ──── */}
           {isSingle && hasResult && state.singleResult && (
             <>
-              {/* Layer Status Grid */}
-              <div className="panel mx-2 mt-2 p-2 flex flex-col flex-shrink-0"
-                   style={{ height: GRID_H }}>
-                <div className="flex items-baseline gap-2 mb-1 flex-shrink-0">
-                  <span className="label text-xs">Layer Status Grid</span>
-                  <span className="text-slate-600 text-xs">
-                    OK = clean  ·  PART = partial  ·  LOSS = total
-                  </span>
-                </div>
-                <div className="flex-1 min-h-0 overflow-auto">
-                  <LayerGrid result={state.singleResult} />
-                </div>
-              </div>
-
-              {/* Season Log */}
+              {/* Bottom tabbed panel */}
               <div className="panel mx-2 mt-2 mb-2 p-2 flex flex-col flex-shrink-0"
-                   style={{ height: LOG_H }}>
-                <span className="label text-xs mb-1 flex-shrink-0">Season Log</span>
+                   style={{ height: BOTTOM_H }}>
+                <div className="flex items-center gap-2 mb-1 flex-shrink-0">
+                  <button
+                    className={`text-xs px-2 py-1 rounded ${bottomTab === 'layers' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    onClick={() => setBottomTab('layers')}
+                  >
+                    Layer Status
+                  </button>
+                  <button
+                    className={`text-xs px-2 py-1 rounded ${bottomTab === 'log' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                    onClick={() => setBottomTab('log')}
+                  >
+                    Season Log
+                  </button>
+                  {bottomTab === 'layers' && (
+                    <span className="text-slate-600 text-xs">
+                      OK = clean  ·  PART = partial  ·  LOSS = total
+                    </span>
+                  )}
+                </div>
                 <div className="flex-1 min-h-0 overflow-auto">
-                  <SeasonLog result={state.singleResult} initialCapital={config.capital.initialCapitalMusd} />
+                  {bottomTab === 'layers' ? (
+                    <LayerGrid result={state.singleResult} />
+                  ) : (
+                    <SeasonLog result={state.singleResult} initialCapital={config.capital.initialCapitalMusd} />
+                  )}
                 </div>
               </div>
             </>
