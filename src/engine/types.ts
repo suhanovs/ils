@@ -94,13 +94,10 @@ export interface LayerLossResult {
 /**
  * Per-deal status at season end.
  *  clean        — no event activity in the cedent's state; collateral returned.
- *  ibnr         — event hit the cedent's state but didn't breach the layer.
- *                 Full collateral TRAPPED for 36 months per IBNR convention
- *                 (loss may develop; better safe than sorry). Interest compounds.
  *  partial      — layer breached but not exhausted; remaining collateral trapped.
  *  total        — layer fully exhausted; investorCapital gone.
  */
-export type DealStatus = 'clean' | 'ibnr' | 'partial' | 'total'
+export type DealStatus = 'clean' | 'partial' | 'total'
 
 export interface DealRecord {
   deal: Deal

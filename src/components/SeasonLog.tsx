@@ -53,7 +53,6 @@ export function SeasonLog({ result, initialCapital }: Props) {
             const hasTrap     = s.newlyTrapped  > 0
             const hasRel      = s.released      > 0
             const equityUp    = s.equity > startEquity
-            const isIbnr      = s.deals.some(d => d.status === 'ibnr')
 
             const eventItems = s.events.map((ev, idx) => {
               const name = ev.name ? `${ev.name} (${ev.year})` : `TC-${ev.year}`
@@ -79,7 +78,7 @@ export function SeasonLog({ result, initialCapital }: Props) {
               <tr
                 key={s.season}
                 className={`border-t border-slate-700/40 ${
-                  hasLoss ? 'bg-red-950/25' : isIbnr ? 'bg-amber-950/20' : ''
+                  hasLoss ? 'bg-red-950/25' : ''
                 }`}
               >
                 {/* Season # */}
@@ -109,7 +108,7 @@ export function SeasonLog({ result, initialCapital }: Props) {
                 <Cell
                   v={hasTrap ? ms(s.newlyTrapped) : '—'}
                   color={hasTrap ? 'text-amber-400' : 'text-slate-600'}
-                  title="Collateral frozen (IBNR + partial losses)"
+                  title="Collateral frozen after partial losses"
                 />
 
                 {/* Released from prior traps */}

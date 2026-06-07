@@ -140,36 +140,16 @@ export function runPath(
     const { count: eventCount, nextCoxState } = drawEventCount(rng, cfg.frequency, coxState)
     coxState = nextCoxState
 
-    const { events, layerLossFractions, maxGUFractionByState } = computeSeasonTowerLosses(
+    const { events, layerLossFractions } = computeSeasonTowerLosses(
       rng, eventCount, pool, towers, cedents, cfg
     )
 
-    // ── 7b. IBNR: identify deals to trap even without confirmed losses ─────
-    //
-    // Any deal whose cedent's state was hit by a GU loss exceeding
-    // IBNR_TRIGGER × layer.attachFrac gets trapped for 36 months,
-    // even if the attachment was NOT breached.  This models the
-    // development / IBNR uncertainty window common in reinsurance.
-    // The full trust is frozen; interest compounds; no loss is confirmed.
-    // If nothing develops, investor gets limitShare × (1+RFR)^3 at release.
-    const IBNR_TRIGGER = 0.60   // trap if GU reached ≥ 60% of attachment
-    const ibnrDealIds = new Set<string>()
-    for (const deal of deals) {
-      // Skip deals that already have confirmed losses
-      if ((layerLossFractions.get(deal.layer.id) ?? 0) > 0) continue
-      const state = deal.layer.cedent.state as State
-      const maxGU = maxGUFractionByState.get(state) ?? 0
-      if (maxGU >= IBNR_TRIGGER * deal.layer.attachFrac) {
-        ibnrDealIds.add(deal.id)
-      }
-    }
-
     // ── 9. Settle deals ────────────────────────────────────────────────────
-    const settlement = settleSeason(deals, layerLossFractions, ibnrDealIds, s, cfg.capital)
+    const settlement = settleSeason(deals, layerLossFractions, s, cfg.capital)
     trapped.push(...settlement.newTrappedPositions)
 
     // ── 10. Compute end-of-season buckets and equity ───────────────────────
-    // ILS liquid = only clean-deal returns; partial/IBNR remain trapped.
+    // ILS liquid = only clean-deal returns; partial-loss residuals remain trapped.
     ilsLiquid = computeLiquidReturn(0, settlement, 0, cfg.capital.riskFreeRate)
     const rfrOutsideMusd = safeStartForSeason * cfg.capital.riskFreeRate
     safeWealth += rfrOutsideMusd

@@ -126,12 +126,6 @@ export interface SeasonLossResult {
   events: HurricaneEvent[]
   /** layerId → cumulative loss fraction ∈ (0,1] for layers with actual losses */
   layerLossFractions: Map<string, number>
-  /**
-   * state → maximum GU loss fraction of PML_100 observed in any event this season.
-   * Used by IBNR logic: layers in states that experienced significant GU loss
-   * (even below their attachment) are trapped pending loss development.
-   */
-  maxGUFractionByState: Map<State, number>
 }
 
 export function computeSeasonTowerLosses(
@@ -144,7 +138,6 @@ export function computeSeasonTowerLosses(
 ): SeasonLossResult {
   const events: HurricaneEvent[]            = []
   const accumulated    = new Map<string, number>()  // layerId → loss fraction
-  const maxGUByState   = new Map<State, number>()   // state  → max GU fraction
 
   const order = shuffledIndices(rng, pool.length)
   const nDraw = Math.min(eventCount, pool.length)
@@ -163,9 +156,6 @@ export function computeSeasonTowerLosses(
       const guFrac = (event.industryLossMusd * weight) /
                       cfg.severity.statePML100Musd[state]
 
-      // Track max GU fraction per state (for IBNR logic)
-      maxGUByState.set(state, Math.max(maxGUByState.get(state) ?? 0, guFrac))
-
       for (const { layer, lossFraction } of flowLossUpTower(guFrac, layers)) {
         if (lossFraction > 0) {
           const prev = accumulated.get(layer.id) ?? 0
@@ -175,7 +165,7 @@ export function computeSeasonTowerLosses(
     }
   }
 
-  return { events, layerLossFractions: accumulated, maxGUFractionByState: maxGUByState }
+  return { events, layerLossFractions: accumulated }
 }
 
 // ── Convenience: describe event impact ────────────────────────────────────

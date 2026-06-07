@@ -230,7 +230,7 @@ export default function App() {
                 <div className="flex items-baseline gap-2 mb-1 flex-shrink-0">
                   <span className="label text-xs">Layer Status Grid</span>
                   <span className="text-slate-600 text-xs">
-                    OK = clean  ·  IBNR = state hit, no claim yet  ·  PART = partial  ·  LOSS = total
+                    OK = clean  ·  PART = partial  ·  LOSS = total
                   </span>
                 </div>
                 <div className="flex-1 min-h-0 overflow-auto">

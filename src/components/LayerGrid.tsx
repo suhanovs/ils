@@ -6,7 +6,6 @@
  *
  * Each cell shows: status pill + the ROL% written that season.
  *   Green   OK    — clean, collateral returned
- *   Amber   IBNR  — state hit, no claim yet, full trust trapped 36mo
  *   Orange  PART  — layer breached, remaining collateral trapped
  *   Red     LOSS  — layer exhausted, investor capital lost
  */
@@ -27,19 +26,17 @@ interface CellData {
 // Status → tailwind classes for the pill background + text
 const STATUS_BG: Record<DealStatus, string> = {
   clean:   'bg-emerald-800/80 text-emerald-200',
-  ibnr:    'bg-amber-700/80   text-amber-100',
   partial: 'bg-orange-700/80  text-orange-100',
   total:   'bg-red-800/80     text-red-200',
 }
 const STATUS_LABEL: Record<DealStatus, string> = {
   clean:   'OK',
-  ibnr:    'IBNR',
   partial: 'PART',
   total:   'LOSS',
 }
 
 function statusSeverity(s: DealStatus): number {
-  return { clean: 0, ibnr: 1, partial: 2, total: 3 }[s]
+  return { clean: 0, partial: 2, total: 3 }[s]
 }
 
 export function LayerGrid({ result }: Props) {

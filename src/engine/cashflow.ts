@@ -75,15 +75,10 @@ export interface SettlementResult {
 /**
  * Settle all deals at season end.
  *
- * @param ibnrDealIds  Deals to IBNR-trap: their state was hit by an event but the
- *                     layer attachment was not breached.  Full collateral is frozen
- *                     for 36 months; interest compounds; no loss is confirmed.
- *                     This models the "incurred but not reported" development window.
  */
 export function settleSeason(
   deals:         Deal[],
   lossFractions: Map<string, number>,
-  ibnrDealIds:   Set<string>,
   currentSeason: number,
   cfg:           CapitalConfig
 ): SettlementResult {
@@ -115,15 +110,6 @@ export function settleSeason(
       newlyTrapped   += remaining
       newTrappedPositions.push({ dealId: deal.id, tier: deal.layer.tier, amountMusd: remaining, releaseSeason })
       dealRecords.push({ deal, lossFraction, lossMusd, status: 'partial', releaseSeasonIfTrapped: releaseSeason })
-
-    } else if (ibnrDealIds.has(deal.id)) {
-      // ── IBNR TRAP ──────────────────────────────────────────────────────
-      // No claim yet, but event hit this cedent's state close to attachment.
-      // Trap the FULL trust as a precaution; interest compounds in trap.
-      // On release (36 months): limitShare × (1+RFR)^3 returned with profit.
-      newlyTrapped += deal.limitShare
-      newTrappedPositions.push({ dealId: deal.id, tier: deal.layer.tier, amountMusd: deal.limitShare, releaseSeason })
-      dealRecords.push({ deal, lossFraction: 0, lossMusd: 0, status: 'ibnr', releaseSeasonIfTrapped: releaseSeason })
 
     } else {
       // ── CLEAN — no event activity ─────────────────────────────────────

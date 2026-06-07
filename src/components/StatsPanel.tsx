@@ -37,7 +37,6 @@ function SingleStats({ result, config }: { result: PathResult; config: SimConfig
   const terminal = result.terminalEquity
   const totalRet = (terminal - initial) / initial
   const nLoss    = result.seasons.filter(r => r.confirmedLoss > 0).length
-  const nIbnr    = result.seasons.filter(r => r.deals.some(d => d.status === 'ibnr')).length
   const premium  = result.seasons.reduce((s, r) => s + r.totalPremium, 0)
   const losses   = result.seasons.reduce((s, r) => s + r.confirmedLoss, 0)
   const interest = result.seasons.reduce((s, r) => s + r.totalInterest, 0)
@@ -53,8 +52,6 @@ function SingleStats({ result, config }: { result: PathResult; config: SimConfig
       <Stat label="Seasons" value={`${config.simulation.nSeasons}`} />
       <Stat label="Loss seasons" value={`${nLoss}`}
         color={nLoss > 0 ? 'text-red-400' : 'text-emerald-400'} />
-      <Stat label="IBNR seasons" value={`${nIbnr}`}
-        color={nIbnr > 0 ? 'text-amber-400' : 'text-emerald-400'} />
       <Stat label="Premiums earned" value={fmtM(premium)} color="text-blue-400" />
       <Stat label="Interest earned"  value={fmtM(interest)} color="text-blue-300" />
       <Stat label="Confirmed losses" value={fmtM(losses)}
