@@ -181,10 +181,10 @@ export default function App() {
             </div>
 
             {/* Right panel: stats + market cycle */}
-            <div className="flex flex-col gap-2 flex-shrink-0 min-h-0" style={{ width: '28%' }}>
+            <div className="flex flex-col gap-2 flex-shrink-0 min-h-0" style={{ width: '34%' }}>
 
               {/* Stats */}
-              <div className="panel p-2 overflow-y-auto flex-shrink-0">
+              <div className="panel p-2 overflow-y-auto flex-1 min-h-0">
                 <div className="label text-xs mb-1">
                   {isSingle ? 'Run Statistics' : 'Monte Carlo Statistics'}
                 </div>
