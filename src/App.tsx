@@ -48,7 +48,7 @@ export default function App() {
   const bottomH = (isSingle && hasResult) ? GRID_H + LOG_H + 8 : 0
 
   return (
-    <div className={`flex flex-col h-screen overflow-hidden ${lightMode ? 'light' : ''}`}>
+    <div className={`app-shell ${lightMode ? 'light' : ''}`}>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="flex items-center gap-3 px-4 py-2 bg-slate-900 border-b border-slate-700 flex-shrink-0">
@@ -134,7 +134,7 @@ export default function App() {
       </header>
 
       {/* ── Body ────────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="app-body">
 
         {/* Config sidebar */}
         <aside className="w-60 flex-shrink-0 border-r border-slate-700 overflow-hidden flex flex-col">
@@ -147,7 +147,7 @@ export default function App() {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <main className="app-main">
 
           {/* ── Upper row: equity chart (70%) + right panel (30%) ────── */}
           <div
