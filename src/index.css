@@ -12,15 +12,6 @@
 }
 
 @layer utilities {
-  .app-shell {
-    @apply flex flex-col h-screen overflow-hidden;
-  }
-  .app-body {
-    @apply flex flex-1 overflow-hidden;
-  }
-  .app-main {
-    @apply flex-1 flex flex-col overflow-hidden min-w-0;
-  }
   .panel {
     @apply bg-slate-800 border border-slate-700 rounded-lg;
   }
@@ -97,24 +88,6 @@ input[type='number']::-webkit-inner-spin-button {
 input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
-}
-
-@media (max-height: 850px) {
-  .app-shell {
-    height: auto;
-    min-height: 100vh;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
-  .app-body {
-    min-height: 0;
-    overflow: visible;
-  }
-
-  .app-main {
-    overflow: visible;
-  }
 }
 
 /* Thin scrollbar */
