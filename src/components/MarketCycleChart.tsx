@@ -21,20 +21,26 @@ import { COVERED_STATES } from '../engine/types'
 interface Props {
   singleResult: PathResult | null
   rolHistory:   ROLRecord[]
+  lightMode:    boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function commonOpt(): any {
+function commonOpt(lightMode: boolean): any {
   return {
     backgroundColor: 'transparent',
     animation: false,
-    tooltip: { trigger: 'axis' },
-    legend: { top: 2, right: 0, textStyle: { color: '#94a3b8', fontSize: 9 }, itemWidth: 12, itemHeight: 7 },
-    grid: { left: 46, right: 10, top: 26, bottom: 28 },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: lightMode ? '#ffffff' : '#1e293b',
+      borderColor: lightMode ? '#cbd5e1' : '#334155',
+      textStyle: { color: lightMode ? '#0f172a' : '#f1f5f9', fontSize: 12 },
+    },
+    legend: { top: 2, right: 0, textStyle: { color: lightMode ? '#334155' : '#94a3b8', fontSize: 9 }, itemWidth: 12, itemHeight: 7 },
+    grid: { left: 48, right: 14, top: 34, bottom: 26 },
   }
 }
 
-export function MarketCycleChart({ singleResult, rolHistory }: Props) {
+export function MarketCycleChart({ singleResult, rolHistory, lightMode }: Props) {
   const [selectedState, setSelectedState] = useState<State>('FL')
   const topRef = useRef<HTMLDivElement>(null)
   const botRef = useRef<HTMLDivElement>(null)
@@ -63,6 +69,9 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
     const tc = topChart.current
     const bc = botChart.current
     if (!tc || !bc) return
+    const axisColor = lightMode ? '#334155' : '#94a3b8'
+    const titleColor = lightMode ? '#334155' : '#64748b'
+    const gridColor = lightMode ? '#e5e7eb' : '#1e293b'
 
     if (singleResult && singleResult.seasons.length > 0) {
       const seasons = singleResult.seasons.map(s => `S${s.season}`)
@@ -88,19 +97,19 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
 
       // ── TOP: selected-state ROL + state loss ────────────────────────
       tc.setOption({
-        ...commonOpt(),
+        ...commonOpt(lightMode),
         title: {
           text: `${selectedState} pricing`,
-          textStyle: { color: '#64748b', fontSize: 10 },
+          textStyle: { color: titleColor, fontSize: 10 },
           top: 4,
           left: 6,
         },
-        xAxis: { type: 'category', data: seasons, axisLabel: { color: '#94a3b8', fontSize: 9 } },
+        xAxis: { type: 'category', data: seasons, axisLabel: { color: axisColor, fontSize: 9 } },
         yAxis: [
-          { type: 'value', name: 'ROL %', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
-            axisLabel: { color: '#94a3b8', fontSize: 9, formatter: (v: number) => `${(v * 100).toFixed(0)}%` }, splitLine: { lineStyle: { color: '#1e293b' } } },
-          { type: 'value', name: '$Bn', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
-            axisLabel: { color: '#94a3b8', fontSize: 9 }, splitLine: { show: false } },
+          { type: 'value', name: 'ROL %', nameTextStyle: { color: axisColor, fontSize: 9 },
+            axisLabel: { color: axisColor, fontSize: 9, formatter: (v: number) => `${(v * 100).toFixed(0)}%` }, splitLine: { lineStyle: { color: gridColor, opacity: lightMode ? 0.65 : 1 } } },
+          { type: 'value', name: '$Bn', nameTextStyle: { color: axisColor, fontSize: 9 },
+            axisLabel: { color: axisColor, fontSize: 9 }, splitLine: { show: false } },
         ],
         series: [
           { name: `${selectedState} Loss $Bn`, type: 'bar', yAxisIndex: 1, data: stateLosses,
@@ -118,21 +127,21 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
 
       // ── BOTTOM: selected-state EL regimes (junior + mid) ────────────
       bc.setOption({
-        ...commonOpt(),
+        ...commonOpt(lightMode),
         title: {
           text: `${selectedState} EL regime`,
-          textStyle: { color: '#64748b', fontSize: 10 },
+          textStyle: { color: titleColor, fontSize: 10 },
           top: 4,
           left: 6,
         },
-        xAxis: { type: 'category', data: seasons, axisLabel: { color: '#94a3b8', fontSize: 9 } },
+        xAxis: { type: 'category', data: seasons, axisLabel: { color: axisColor, fontSize: 9 } },
         yAxis: {
-          type: 'value', name: 'EL / limit', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
+          type: 'value', name: 'EL / limit', nameTextStyle: { color: axisColor, fontSize: 9 },
           axisLabel: {
-            color: '#94a3b8', fontSize: 9,
+            color: axisColor, fontSize: 9,
             formatter: (v: number) => `${(v * 100).toFixed(1)}%`,
           },
-          splitLine: { lineStyle: { color: '#1e293b' } },
+          splitLine: { lineStyle: { color: gridColor, opacity: lightMode ? 0.65 : 1 } },
         },
         series: [
           {
@@ -162,13 +171,13 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
       const years  = valid.map(r => String(r.year))
 
       tc.setOption({
-        ...commonOpt(),
-        xAxis: { type: 'category', data: years, axisLabel: { color: '#94a3b8', fontSize: 9 } },
+        ...commonOpt(lightMode),
+        xAxis: { type: 'category', data: years, axisLabel: { color: axisColor, fontSize: 9 } },
         yAxis: [
-          { type: 'value', name: 'Multiple ×', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
-            axisLabel: { color: '#94a3b8', fontSize: 9 }, splitLine: { lineStyle: { color: '#1e293b' } } },
-          { type: 'value', name: 'TC $Bn', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
-            axisLabel: { color: '#94a3b8', fontSize: 9 }, splitLine: { show: false } },
+          { type: 'value', name: 'Multiple ×', nameTextStyle: { color: axisColor, fontSize: 9 },
+            axisLabel: { color: axisColor, fontSize: 9 }, splitLine: { lineStyle: { color: gridColor, opacity: lightMode ? 0.65 : 1 } } },
+          { type: 'value', name: 'TC $Bn', nameTextStyle: { color: axisColor, fontSize: 9 },
+            axisLabel: { color: axisColor, fontSize: 9 }, splitLine: { show: false } },
         ],
         series: [
           { name: 'TC $Bn', type: 'bar', yAxisIndex: 1,
@@ -191,17 +200,17 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
 
       // Historical EL: static reference lines at assumed baselines
       bc.setOption({
-        ...commonOpt(),
-        title: { text: 'EL baseline (industry reference)', textStyle: { color: '#475569', fontSize: 9 }, top: 4, left: 4 },
-        xAxis: { type: 'category', data: years, axisLabel: { color: '#94a3b8', fontSize: 9 } },
+        ...commonOpt(lightMode),
+        title: { text: 'EL baseline (industry reference)', textStyle: { color: titleColor, fontSize: 9 }, top: 4, left: 4 },
+        xAxis: { type: 'category', data: years, axisLabel: { color: axisColor, fontSize: 9 } },
         yAxis: {
-          type: 'value', name: 'EL / limit', nameTextStyle: { color: '#94a3b8', fontSize: 9 },
+          type: 'value', name: 'EL / limit', nameTextStyle: { color: axisColor, fontSize: 9 },
           max: 0.12,
           axisLabel: {
-            color: '#94a3b8', fontSize: 9,
+            color: axisColor, fontSize: 9,
             formatter: (v: number) => `${(v * 100).toFixed(0)}%`,
           },
-          splitLine: { lineStyle: { color: '#1e293b' } },
+          splitLine: { lineStyle: { color: gridColor, opacity: lightMode ? 0.65 : 1 } },
         },
         series: [
           { name: 'Junior 5%', type: 'line',
@@ -219,7 +228,7 @@ export function MarketCycleChart({ singleResult, rolHistory }: Props) {
         ],
       }, true)
     }
-  }, [singleResult, rolHistory, selectedState])
+  }, [singleResult, rolHistory, selectedState, lightMode])
 
   return (
     <div className="flex flex-col h-full gap-1">

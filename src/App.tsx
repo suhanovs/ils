@@ -176,6 +176,7 @@ export default function App() {
                     mode={state.mode}
                     config={config}
                     logScale={logScale}
+                    lightMode={lightMode}
                   />
               </div>
             </div>
@@ -206,6 +207,7 @@ export default function App() {
                     <MarketCycleChart
                       singleResult={state.singleResult}
                       rolHistory={bundle.rolHistory}
+                      lightMode={lightMode}
                     />
                   </div>
                 </div>

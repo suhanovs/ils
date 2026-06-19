@@ -10,9 +10,10 @@ interface Props {
   mode:           'single' | 'mc'
   config:         SimConfig
   logScale:       boolean
+  lightMode:      boolean
 }
 
-export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config, logScale }: Props) {
+export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config, logScale, lightMode }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef     = useRef<echarts.ECharts | null>(null)
 
@@ -34,6 +35,12 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
     const seasons = Array.from({ length: nS + 1 }, (_, i) => i)
     const EPS     = 0.01
     const yVal    = (v: number) => logScale ? Math.max(v, EPS) : v
+    const axisColor = lightMode ? '#334155' : '#94a3b8'
+    const gridColor = lightMode ? '#e5e7eb' : '#1e293b'
+    const axisLineColor = lightMode ? '#cbd5e1' : '#475569'
+    const tooltipBg = lightMode ? '#ffffff' : '#1e293b'
+    const tooltipBorder = lightMode ? '#cbd5e1' : '#334155'
+    const tooltipText = lightMode ? '#0f172a' : '#f1f5f9'
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const baseOption: any = {
@@ -42,6 +49,9 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
       grid: { left: 60, right: 20, top: 30, bottom: 50 },
       tooltip: {
         trigger: 'axis',
+        backgroundColor: tooltipBg,
+        borderColor: tooltipBorder,
+        textStyle: { color: tooltipText, fontFamily: 'JetBrains Mono, monospace', fontSize: 12 },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         formatter: (params: any) => {
           if (!Array.isArray(params) || params.length === 0) return ''
@@ -73,18 +83,18 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
       xAxis: {
         type: 'category', data: seasons, name: 'Season',
         nameLocation: 'middle', nameGap: 30,
-        axisLine: { lineStyle: { color: '#475569' } },
-        axisLabel: { color: '#94a3b8' },
+        axisLine: { lineStyle: { color: axisLineColor } },
+        axisLabel: { color: axisColor },
       },
       yAxis: {
         type: logScale ? 'log' : 'value', name: 'Equity ($M)', nameLocation: 'middle', nameGap: 50,
         min: logScale ? EPS : undefined,
-        axisLine: { lineStyle: { color: '#475569' } },
+        axisLine: { lineStyle: { color: axisLineColor } },
         axisLabel: {
-          color: '#94a3b8',
+          color: axisColor,
           formatter: (v: number) => `$${(logScale && v <= EPS ? 0 : v).toFixed(0)}M`,
         },
-        splitLine: { lineStyle: { color: '#1e293b' } },
+        splitLine: { lineStyle: { color: gridColor, opacity: lightMode ? 0.65 : 1 } },
       },
     }
 
@@ -194,7 +204,7 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
     }
 
     chart.setOption(baseOption, true)
-  }, [singleResult, noTrapResult, mcResult, mode, config, logScale])
+  }, [singleResult, noTrapResult, mcResult, mode, config, logScale, lightMode])
 
   return <div ref={containerRef} className="w-full h-full min-h-[340px]" />
 }
