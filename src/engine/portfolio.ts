@@ -40,7 +40,9 @@ export function buildPortfolio(
   if (availableCapital <= 0 || allLayers.length === 0) return []
 
   const { nDealsRange, maxDealWeight, juniorFraction } = cfg.portfolio
-  const N = uniformInt(rng, nDealsRange[0], nDealsRange[1])
+  const lo = Math.max(1, Math.floor(Math.min(nDealsRange[0], nDealsRange[1])))
+  const hi = Math.max(lo, Math.floor(Math.max(nDealsRange[0], nDealsRange[1])))
+  const N = uniformInt(rng, lo, hi)
 
   // ── Step 1: separate layers by tier, excluding remote ─────────────────
   const juniorPool: Layer[] = []
@@ -71,7 +73,7 @@ export function buildPortfolio(
   if (selectedLayers.length === 0) return []
 
   // ── Step 3: random weights ────────────────────────────────────────────
-  const weights = dirichletWeights(rng, selectedLayers.length, maxDealWeight)
+  const weights = dirichletWeights(rng, selectedLayers.length, Math.max(0.001, maxDealWeight))
 
   // ── Step 4: build Deal objects ────────────────────────────────────────
   return selectedLayers.map((layer, i) => {

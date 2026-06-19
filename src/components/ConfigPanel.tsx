@@ -28,8 +28,11 @@ function NumInput({ value, onChange, min, max, step = 'any', disabled }:
   { value: number; onChange: (v: number) => void; min?: number; max?: number; step?: string | number; disabled?: boolean }) {
   return (
     <input type="number" className="input" value={value} disabled={disabled}
-      min={min} max={max} step={step}
-      onChange={(e) => onChange(parseFloat(e.target.value) || 0)} />
+      step={step}
+      onChange={(e) => {
+        const v = parseFloat(e.target.value)
+        if (Number.isFinite(v)) onChange(v)
+      }} />
   )
 }
 
@@ -194,37 +197,16 @@ export function ConfigPanel({ config, onChange, disabled }: Props) {
       <Section title="Portfolio" color="purple">
         <Row label="Min deals">
           <NumInput value={po.nDealsRange[0]} min={2} max={20} step={1} disabled={d}
-            onChange={(v) => {
-              const minW = Math.ceil(100 / po.nDealsRange[1]) / 100
-              onChange({ portfolio: { ...po, nDealsRange: [v, po.nDealsRange[1]], maxDealWeight: Math.max(po.maxDealWeight, minW) } })
-            }} />
+            onChange={(v) => onChange({ portfolio: { ...po, nDealsRange: [v, po.nDealsRange[1]] } })} />
         </Row>
         <Row label="Max deals">
           <NumInput value={po.nDealsRange[1]} min={2} max={30} step={1} disabled={d}
-            onChange={(v) => {
-              // When max deals changes, ensure maxDealWeight ≥ 1/maxDeals
-              const minW = Math.ceil(100 / v) / 100
-              onChange({ portfolio: { ...po, nDealsRange: [po.nDealsRange[0], v], maxDealWeight: Math.max(po.maxDealWeight, minW) } })
-            }} />
+            onChange={(v) => onChange({ portfolio: { ...po, nDealsRange: [po.nDealsRange[0], v] } })} />
         </Row>
-        {/* Validation: weight must be ≥ 1/nDealsMax */}
-        {(() => {
-          const minW = Math.ceil(100 / po.nDealsRange[1])
-          const warn = po.maxDealWeight * 100 < minW
-          return (
-            <>
-              <Row label="Max deal weight %">
-                <NumInput value={po.maxDealWeight * 100} min={minW} max={100} step={1} disabled={d}
-                  onChange={(v) => onChange({ portfolio: { ...po, maxDealWeight: Math.max(v / 100, minW / 100) } })} />
-              </Row>
-              {warn && (
-                <div className="text-red-400 text-xs px-1 pb-1">
-                  Min {minW}% required for {po.nDealsRange[1]} deals
-                </div>
-              )}
-            </>
-          )
-        })()}
+        <Row label="Max deal weight %">
+          <NumInput value={po.maxDealWeight * 100} min={0} max={100} step={1} disabled={d}
+            onChange={(v) => onChange({ portfolio: { ...po, maxDealWeight: v / 100 } })} />
+        </Row>
         <Row label="Junior fraction %">
           <NumInput value={po.juniorFraction * 100} min={0} max={100} step={5} disabled={d}
             onChange={(v) => onChange({ portfolio: { ...po, juniorFraction: v / 100 } })} />
