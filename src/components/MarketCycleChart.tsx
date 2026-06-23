@@ -35,8 +35,8 @@ function commonOpt(lightMode: boolean): any {
       borderColor: lightMode ? '#cbd5e1' : '#334155',
       textStyle: { color: lightMode ? '#0f172a' : '#f1f5f9', fontSize: 12 },
     },
-    legend: { top: 2, right: 0, textStyle: { color: lightMode ? '#334155' : '#94a3b8', fontSize: 9 }, itemWidth: 12, itemHeight: 7 },
-    grid: { left: 48, right: 14, top: 34, bottom: 26 },
+    legend: { top: 16, right: 0, textStyle: { color: lightMode ? '#334155' : '#94a3b8', fontSize: 9 }, itemWidth: 12, itemHeight: 7 },
+    grid: { left: 48, right: 16, top: 48, bottom: 24 },
   }
 }
 
@@ -101,7 +101,7 @@ export function MarketCycleChart({ singleResult, rolHistory, lightMode }: Props)
         title: {
           text: `${selectedState} pricing`,
           textStyle: { color: titleColor, fontSize: 10 },
-          top: 4,
+          top: 2,
           left: 6,
         },
         xAxis: { type: 'category', data: seasons, axisLabel: { color: axisColor, fontSize: 9 } },
@@ -131,7 +131,7 @@ export function MarketCycleChart({ singleResult, rolHistory, lightMode }: Props)
         title: {
           text: `${selectedState} EL regime`,
           textStyle: { color: titleColor, fontSize: 10 },
-          top: 4,
+          top: 2,
           left: 6,
         },
         xAxis: { type: 'category', data: seasons, axisLabel: { color: axisColor, fontSize: 9 } },
@@ -201,7 +201,7 @@ export function MarketCycleChart({ singleResult, rolHistory, lightMode }: Props)
       // Historical EL: static reference lines at assumed baselines
       bc.setOption({
         ...commonOpt(lightMode),
-        title: { text: 'EL baseline (industry reference)', textStyle: { color: titleColor, fontSize: 9 }, top: 4, left: 4 },
+        title: { text: 'EL baseline (industry reference)', textStyle: { color: titleColor, fontSize: 9 }, top: 2, left: 4 },
         xAxis: { type: 'category', data: years, axisLabel: { color: axisColor, fontSize: 9 } },
         yAxis: {
           type: 'value', name: 'EL / limit', nameTextStyle: { color: axisColor, fontSize: 9 },
