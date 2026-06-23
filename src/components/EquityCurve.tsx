@@ -35,9 +35,9 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
     const seasons = Array.from({ length: nS + 1 }, (_, i) => i)
     const EPS     = 0.01
     const yVal    = (v: number) => logScale ? Math.max(v, EPS) : v
-    const axisColor = lightMode ? '#334155' : '#94a3b8'
-    const gridColor = lightMode ? '#e5e7eb' : '#1e293b'
-    const axisLineColor = lightMode ? '#cbd5e1' : '#475569'
+    const axisColor = lightMode ? '#111827' : '#94a3b8'
+    const gridColor = lightMode ? '#cbd5e1' : '#1e293b'
+    const axisLineColor = lightMode ? '#64748b' : '#475569'
     const tooltipBg = lightMode ? '#ffffff' : '#1e293b'
     const tooltipBorder = lightMode ? '#cbd5e1' : '#334155'
     const tooltipText = lightMode ? '#0f172a' : '#f1f5f9'
@@ -94,20 +94,20 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
           color: axisColor,
           formatter: (v: number) => `$${(logScale && v <= EPS ? 0 : v).toFixed(0)}M`,
         },
-        splitLine: { lineStyle: { color: gridColor, opacity: lightMode ? 0.65 : 1 } },
+        splitLine: { lineStyle: { color: gridColor, opacity: lightMode ? 0.95 : 1, width: lightMode ? 1.2 : 1 } },
       },
     }
 
     const ruinSeries = {
       type: 'line', name: 'Ruin', data: seasons.map(() => yVal(ruin)),
-      color: '#dc2626',
-      lineStyle: { color: '#dc2626', type: 'dashed', width: 1 },
+      color: lightMode ? '#991b1b' : '#dc2626',
+      lineStyle: { color: lightMode ? '#991b1b' : '#dc2626', type: 'dashed', width: lightMode ? 1.4 : 1 },
       symbol: 'none', z: 0,
     }
     const initialSeries = {
       type: 'line', name: 'Initial', data: seasons.map(() => yVal(initial)),
-      color: '#334155',
-      lineStyle: { color: '#334155', type: 'dotted', width: 1 },
+      color: lightMode ? '#475569' : '#334155',
+      lineStyle: { color: lightMode ? '#475569' : '#334155', type: 'dotted', width: lightMode ? 1.4 : 1 },
       symbol: 'none', z: 0,
     }
 
@@ -128,8 +128,8 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
         series.push({
           type: 'line', name: 'No-trap',
           data: [initial, ...noTrapResult.seasons.map(s => yVal(s.equity))],
-          color: '#a3e635',
-          lineStyle: { color: '#a3e635', type: 'dashed', width: 1.5 },
+          color: lightMode ? '#4d7c0f' : '#a3e635',
+          lineStyle: { color: lightMode ? '#4d7c0f' : '#a3e635', type: 'dashed', width: lightMode ? 2.2 : 1.5 },
           symbol: 'none', smooth: false,
         })
       }
@@ -137,15 +137,15 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
       series.push({
         type: 'line', name: 'Equity',
         data: equityData,
-        color: '#38bdf8',
-        lineStyle: { color: '#38bdf8', width: 2.5 },
+        color: lightMode ? '#0369a1' : '#38bdf8',
+        lineStyle: { color: lightMode ? '#0369a1' : '#38bdf8', width: lightMode ? 3.2 : 2.5 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: 'rgba(56,189,248,0.2)' },
             { offset: 1, color: 'rgba(56,189,248,0.02)' },
           ]),
         },
-        symbol: 'circle', symbolSize: 4, itemStyle: { color: '#38bdf8' },
+        symbol: 'circle', symbolSize: 4, itemStyle: { color: lightMode ? '#0369a1' : '#38bdf8' },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         markPoint: { data: marks as any },
         z: 3,
@@ -164,8 +164,8 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
           type: 'line',
           name: i === 0 ? 'Negative paths' : '',
           data: wp.equity.map(yVal),
-          color: '#ef4444',
-          lineStyle: { color: '#ef4444', width: 0.8, opacity: 0.55 },
+          color: lightMode ? '#b91c1c' : '#ef4444',
+          lineStyle: { color: lightMode ? '#b91c1c' : '#ef4444', width: lightMode ? 1 : 0.8, opacity: lightMode ? 0.75 : 0.55 },
           symbol: 'none', smooth: false,
           showSymbol: false,
         })
@@ -173,11 +173,11 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
 
       // Fan chart: P5/P25/Median/P75/P95
       const fan = [
-        { data: mcResult.equityP5,  name: 'P5',     color: '#f87171', opacity: 0.35 },
-        { data: mcResult.equityP25, name: 'P25',    color: '#60a5fa', opacity: 0.50 },
-        { data: mcResult.equityP50, name: 'Median', color: '#34d399', opacity: 0.95 },
-        { data: mcResult.equityP75, name: 'P75',    color: '#60a5fa', opacity: 0.50 },
-        { data: mcResult.equityP95, name: 'P95',    color: '#a78bfa', opacity: 0.35 },
+        { data: mcResult.equityP5,  name: 'P5',     color: lightMode ? '#b91c1c' : '#f87171', opacity: lightMode ? 0.75 : 0.35 },
+        { data: mcResult.equityP25, name: 'P25',    color: lightMode ? '#2563eb' : '#60a5fa', opacity: lightMode ? 0.75 : 0.50 },
+        { data: mcResult.equityP50, name: 'Median', color: lightMode ? '#047857' : '#34d399', opacity: 0.95 },
+        { data: mcResult.equityP75, name: 'P75',    color: lightMode ? '#2563eb' : '#60a5fa', opacity: lightMode ? 0.75 : 0.50 },
+        { data: mcResult.equityP95, name: 'P95',    color: lightMode ? '#7c3aed' : '#a78bfa', opacity: lightMode ? 0.75 : 0.35 },
       ]
       for (const f of fan) {
         series.push({
@@ -197,8 +197,8 @@ export function EquityCurve({ singleResult, noTrapResult, mcResult, mode, config
         {
           type: 'line', name: 'Equity',
           data: [initial, ...Array(nS).fill(null)],
-          color: '#38bdf8',
-          lineStyle: { color: '#38bdf8', width: 2 }, symbol: 'circle',
+          color: lightMode ? '#0369a1' : '#38bdf8',
+          lineStyle: { color: lightMode ? '#0369a1' : '#38bdf8', width: lightMode ? 3 : 2 }, symbol: 'circle',
         },
       ]
     }
