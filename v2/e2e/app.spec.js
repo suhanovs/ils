@@ -52,3 +52,11 @@ for (const viewport of [{width:1280,height:800},{width:375,height:812}]) {
   await expect(page.getByRole('button',{name:'Show housing tracts'})).toBeVisible();
  });
 }
+
+test('explains the map in plain language without legalistic warnings', async ({page}) => {
+  await page.goto('/v2/');
+  await expect(page.getByRole('heading',{name:'Where homes are'})).toBeVisible();
+  await expect(page.getByText('Estimated wind extent over the full storm.')).toBeVisible();
+  await expect(page.getByText('Read this map carefully')).toHaveCount(0);
+  await expect(page.getByText('Sources & assumptions')).toBeVisible();
+});
