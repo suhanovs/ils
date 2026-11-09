@@ -26,3 +26,8 @@ test('mobile layout exposes map and working controls without horizontal overflow
   await page.getByRole('button', {name:'Pause track'}).click();
   await expect(page.getByRole('button', {name:'Play track'})).toBeVisible();
 });
+
+test('basemap uses OpenStreetMap tiles, not a provider API-key placeholder', async ({page}) => {
+  await page.goto('/v2/');
+  await expect(page.locator('.leaflet-tile').first()).toHaveAttribute('src', /tile\.openstreetmap\.org/);
+});
