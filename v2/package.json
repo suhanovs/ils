@@ -1,0 +1,1 @@
+{"name":"aboutils-v2","version":"1.0.0","private":true,"type":"module","scripts":{"dev":"vite --host 127.0.0.1","build":"vite build","test":"node --test"},"dependencies":{"leaflet":"1.9.4"},"devDependencies":{"@playwright/test":"^1.55.0","vite":"6.1.0"}}
