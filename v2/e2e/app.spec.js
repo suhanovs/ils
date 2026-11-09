@@ -42,7 +42,7 @@ for (const viewport of [{width:1280,height:800},{width:375,height:812}]) {
   await page.getByRole('button',{name:'Select tract 12001000201'}).click();
   await expect(page.getByText('2,499', {exact:true})).toBeVisible();
   await expect(page.getByText('± 320', {exact:true})).toBeVisible();
-  await expect(page.getByText('Harbor Mutual (fictional)')).toBeVisible();
+  await expect(page.getByText('Census estimate', {exact:false}).first()).toBeVisible();
   await expect(page.locator('#map')).toBeInViewport();
   if (viewport.width === 375) {
    const onTop = await page.locator('#map').evaluate(el=>{const r=el.getBoundingClientRect(); const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return el.contains(hit)});
@@ -60,3 +60,29 @@ test('explains the map in plain language without legalistic warnings', async ({p
   await expect(page.getByText('Read this map carefully')).toHaveCount(0);
   await expect(page.getByText('Sources & assumptions')).toBeVisible();
 });
+
+for (const width of [1280,375]) {
+ test(`fictional market explorer at ${width}px`, async ({page})=>{
+  await page.setViewportSize({width,height:800}); await page.goto('/v2/');
+  await page.getByRole('button',{name:'Show housing tracts'}).click();
+  await expect(page.getByRole('heading',{name:'Fictional cedent market'})).toBeVisible();
+  const canvas = page.locator('.leaflet-overlay-pane canvas').first();
+  const initial = await canvas.evaluate(el=>el.toDataURL());
+  await page.getByRole('checkbox',{name:/Cedent A/}).check();
+  await page.getByRole('checkbox',{name:/Cedent B/}).check();
+  await expect(page.locator('#market-summary')).toContainText('2 selected');
+  await expect(page.locator('#market-summary')).toContainText('overlap');
+  await expect(page.locator('#market-summary')).toContainText('housing-unit equivalents');
+  await expect.poll(()=>canvas.evaluate(el=>el.toDataURL())).not.toBe(initial);
+  const concentration=await canvas.evaluate(el=>el.toDataURL());
+  await page.getByLabel('Map view').selectOption('overlap');
+  await expect.poll(()=>canvas.evaluate(el=>el.toDataURL())).not.toBe(concentration);
+  const before=await page.locator('#market-summary').textContent();
+  await page.getByLabel('Market seed').fill('43');
+  await page.getByRole('button',{name:'Generate market'}).click();
+  await expect(page.locator('#market-summary')).not.toHaveText(before);
+  await page.getByRole('button',{name:'50 kt'}).click();
+  await expect(page.getByRole('button',{name:'50 kt'})).toHaveAttribute('aria-pressed','true');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+ });
+}
