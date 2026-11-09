@@ -31,3 +31,24 @@ test('basemap uses OpenStreetMap tiles, not a provider API-key placeholder', asy
   await page.goto('/v2/');
   await expect(page.locator('.leaflet-tile').first()).toHaveAttribute('src', /tile\.openstreetmap\.org/);
 });
+
+for (const viewport of [{width:1280,height:800},{width:375,height:812}]) {
+ test(`housing overlay searchable selection at ${viewport.width}px`, async ({page})=>{
+  await page.setViewportSize(viewport); await page.goto('/v2/');
+  await page.getByRole('button',{name:'Show housing tracts'}).click();
+  await expect(page.getByRole('button',{name:'Hide housing tracts'})).toBeVisible();
+  const search=page.getByRole('searchbox',{name:'Search Florida tract GEOID'});
+  await search.fill('12001000201');
+  await page.getByRole('button',{name:'Select tract 12001000201'}).click();
+  await expect(page.getByText('2,499', {exact:true})).toBeVisible();
+  await expect(page.getByText('± 320', {exact:true})).toBeVisible();
+  await expect(page.getByText('Harbor Mutual (fictional)')).toBeVisible();
+  await expect(page.locator('#map')).toBeInViewport();
+  if (viewport.width === 375) {
+   const onTop = await page.locator('#map').evaluate(el=>{const r=el.getBoundingClientRect(); const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return el.contains(hit)});
+   expect(onTop).toBe(true);
+  }
+  await page.getByRole('button',{name:'Hide housing tracts'}).click();
+  await expect(page.getByRole('button',{name:'Show housing tracts'})).toBeVisible();
+ });
+}
