@@ -68,11 +68,14 @@ for (const width of [1280,375]) {
   await expect(page.getByRole('heading',{name:'Fictional cedent market'})).toBeVisible();
   const canvas = page.locator('.leaflet-overlay-pane canvas').first();
   const initial = await canvas.evaluate(el=>el.toDataURL());
-  await page.getByRole('checkbox',{name:/Cedent A/}).check();
-  await page.getByRole('checkbox',{name:/Cedent B/}).check();
+  await page.getByRole('checkbox',{name:/Cedent 01/}).check();
+  await page.getByRole('checkbox',{name:/Cedent 02/}).check();
   await expect(page.locator('#market-summary')).toContainText('2 selected');
-  await expect(page.locator('#market-summary')).toContainText('overlap');
-  await expect(page.locator('#market-summary')).toContainText('housing-unit equivalents');
+  await expect(page.locator('#market-summary')).toContainText('of selected exposure');
+  await expect(page.locator('#market-summary')).toContainText('statewide modeled market');
+  await expect(page.locator('#market-residual')).toContainText('Other insurers');
+  await expect(page.locator('#market-summary')).toContainText('Largest county');
+  await expect(page.locator('#market-summary')).not.toContainText('housing-unit equivalents');
   await expect.poll(()=>canvas.evaluate(el=>el.toDataURL())).not.toBe(initial);
   const concentration=await canvas.evaluate(el=>el.toDataURL());
   await page.getByLabel('Map view').selectOption('overlap');

@@ -12,18 +12,41 @@ function distance(a,b){const y=(a[1]-b[1])*69, x=(a[0]-b[0])*69*Math.cos((a[1]+b
 export function generateMarket(features, seed) {
  if(!Number.isSafeInteger(seed)||seed<0||seed>4294967295) throw new RangeError('Seed must be an integer from 0 to 4294967295');
  const rand=random(seed), locations=features.map(f=>center(f.geometry));
- const eligible=features.map((f,i)=>f.properties.housing_units_estimate>0?i:-1).filter(i=>i>=0);
+ const housing=features.map(f=>Math.max(0,Number(f.properties.housing_units_estimate)||0));
+ const total=housing.reduce((a,b)=>a+b,0);
+ const eligible=housing.map((h,i)=>h>0?i:-1).filter(i=>i>=0);
  if(!eligible.length) throw new RangeError('Housing data is empty');
- const anchors=Array.from({length:3},()=>locations[eligible[Math.floor(rand()*eligible.length)]]);
- const cedents=Array.from({length:6},(_,i)=>({name:`Cedent ${String.fromCharCode(65+i)}`,center:anchors[Math.floor(i/2)],radius:100+rand()*100,weight:0.5+rand(),amount:0,share:0}));
- const tracts=features.map((f,i)=>{
-  const distances=cedents.map(c=>distance(locations[i],c.center));
-  const scores=cedents.map((c,j)=>c.weight*Math.max(0,1-distances[j]/c.radius)**2);
-  const sum=scores.reduce((a,b)=>a+b,0), housing=Math.max(0,f.properties.housing_units_estimate);
-  const allocations=scores.map((s,j)=>{const value=housing*0.65*s/(1+sum);cedents[j].amount+=value;return value});
-  return {allocations,distances};
+ // Distinct primary anchors; secondary anchors need not coincide with another company.
+ const pool=[...eligible];
+ const cedents=Array.from({length:Math.min(36,eligible.length)},(_,i)=>{
+  const pick=Math.floor(rand()*pool.length), primary=pool.splice(pick,1)[0];
+  const centers=[locations[primary]];
+  if(i%3===0) for(let j=0;j<1+(i%9===0?1:0);j++) centers.push(locations[eligible[Math.floor(rand()*eligible.length)]]);
+  const target=i<3?[.075,.065,.055][i]:.005+rand()*.011;
+  return {name:`Cedent ${String(i+1).padStart(2,'0')}`,centers,radius:75+rand()*105,target,amount:0,share:0};
  });
- const total=cedents.reduce((s,c)=>s+c.amount,0);cedents.forEach(c=>{c.share=total?c.amount/total:0});
+ // Each firm has a target, not a guaranteed outcome. Competition for tract
+ // capacity reduces allocations proportionally and leaves at least 30% elsewhere.
+ const scores=features.map((f,i)=>cedents.map(c=>{
+  let best=0;
+  for(const anchor of c.centers) best=Math.max(best,Math.max(0,1-distance(locations[i],anchor)/c.radius)**2);
+  return best*housing[i];
+ }));
+ const tracts=features.map(()=>({allocations:cedents.map(()=>0)}));
+ const remaining=housing.map(h=>h*.7);
+ for(let round=0;round<20;round++) {
+  const totals=cedents.map((_,j)=>scores.reduce((sum,row,i)=>sum+(remaining[i]>1e-10?row[j]*remaining[i]/(housing[i]||1):0),0));
+  const needs=cedents.map(c=>Math.max(0,c.target*total-c.amount));
+  if(Math.max(...needs)<total*1e-8) break;
+  tracts.forEach((t,i)=>{
+   if(remaining[i]<=1e-10) return;
+   const proposals=cedents.map((c,j)=>totals[j]?needs[j]*scores[i][j]*(remaining[i]/housing[i])/totals[j]:0);
+   const sum=proposals.reduce((a,b)=>a+b,0), scale=sum?Math.min(1,remaining[i]/sum):0;
+   proposals.forEach((x,j)=>{const value=x*scale;t.allocations[j]+=value;cedents[j].amount+=value;remaining[i]-=value});
+   remaining[i]=Math.max(0,remaining[i]);
+  });
+ }
+ cedents.forEach(c=>{c.share=c.amount/total});
  return {seed,cedents,tracts};
 }
 export function summarizeSelection(market,selected) {
