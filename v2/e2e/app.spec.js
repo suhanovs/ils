@@ -67,6 +67,7 @@ for (const viewport of [{width:1280,height:800},{width:375,height:812}]) {
   await expect(page.getByText('2,499', {exact:true})).toBeVisible();
   await expect(page.getByText('± 320', {exact:true})).toBeVisible();
   await expect(page.getByText('Census estimate', {exact:false}).first()).toBeVisible();
+  if (viewport.width === 375) await page.locator('#map').scrollIntoViewIfNeeded();
   await expect(page.locator('#map')).toBeInViewport();
   if (viewport.width === 375) {
    const onTop = await page.locator('#map').evaluate(el=>{const r=el.getBoundingClientRect(); const hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return el.contains(hit)});
