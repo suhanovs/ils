@@ -20,3 +20,8 @@
 .storm-symbol{transition:color .35s linear}.storm-symbol svg{width:32px;height:32px;filter:drop-shadow(0 0 3px #161b20) drop-shadow(0 0 4px #fff8)}
 .timeline{padding:8px 14px}.timeline-head strong{margin-top:1px;font-size:12px}.timeline-head .overline{font-size:8px}.timeline-actions button{width:27px;height:27px}.timeline input{display:block;margin:5px 0 3px;height:14px}.timeline-foot{font-size:8px}@media(max-width:760px){.timeline{padding:8px 12px}.timeline input{margin:5px 0 3px}}
 .xol-waterfall{margin:8px 0 5px;display:grid;gap:3px}.xol-waterfall div{display:grid;grid-template-columns:48px 1fr;gap:6px;align-items:center;color:#bfd0cf;font-size:10px}.xol-waterfall i{height:6px;background:#ffffff0b;position:relative;border-radius:2px}.xol-waterfall b{position:absolute;top:0;height:100%;border-radius:2px}.xol-waterfall .positive{background:#61d6bb}.xol-waterfall .negative{background:#e78370}
+
+#market-legend { display:flex; flex-wrap:wrap; gap:6px 12px; margin:8px 0; font-size:11px; color:#c7d1d2; }
+#market-legend span { display:inline-flex; align-items:center; gap:5px; }
+#market-legend i { width:9px; height:9px; display:inline-block; border-radius:2px; }
+#market-legend p { flex-basis:100%; margin:2px 0; line-height:1.4; }

@@ -14,7 +14,7 @@ app.innerHTML = `
   <div class="divider"></div><div class="section-heading"><div><span class="overline">EXPLORE THE STORM</span><h2>Cumulative wind swath</h2></div></div>
   <p class="description">Static estimated wind extent over the full storm; not winds at the selected time.</p>
   <div class="swath-legend" aria-label="Cumulative wind thresholds"><span data-swath="34"><i></i>34 kt · 39 mph</span><span data-swath="50"><i></i>50 kt · 58 mph</span><span data-swath="64"><i></i>64 kt · 74 mph</span></div><button id="track-toggle" aria-pressed="true">Hide track</button>
-  <section class="exposure"><div class="divider"></div><h2>Where homes are</h2><fieldset class="visual-options"><legend>Visualization options</legend><label><input id="tract-toggle" type="checkbox"> Housing tracts</label></fieldset><p id="tract-status" role="status"></p><button id="tract-retry" type="button" hidden>Retry loading data</button><details><summary>Find a tract</summary><label for="tract-search">Search Florida tract GEOID</label><input id="tract-search" type="search" inputmode="numeric" placeholder="Enter tract GEOID" disabled><div id="tract-results" aria-live="polite"></div><div id="tract-detail" aria-live="polite"></div></details><div class="divider"></div><div class="market-heading"><h2>Fictional cedent market</h2><span class="help"><button type="button" aria-label="About modeled cedents" aria-describedby="market-help">?</button><span id="market-help" role="tooltip">Fictional insurers use modeled housing, not actual policies. Shares include other insurers statewide.</span></span></div><div class="market-controls"><label for="market-seed">Seed</label><input id="market-seed" type="number" min="0" max="4294967295" step="1" value="42"><button id="market-generate" type="button" disabled>Generate</button><label for="market-view">View</label><select id="market-view"><option value="concentration">Concentration</option><option value="overlap">Overlap</option></select></div><p id="market-error" role="status"></p><p id="market-residual"></p><div id="cedent-list" aria-label="Select cedents"></div><p id="market-summary" aria-live="polite">Loading market…</p><section class="xol"><div class="divider"></div><h2>Junior XOL scenario</h2><p class="xol-caption">Modeled Ian loss · assumed terms</p><label for="xol-capital">Upfront capital ($)</label><input id="xol-capital" type="number" min="0" step="1000" value="1000000"><div class="xol-terms"><label>Attachment (% of exposure)<input id="xol-attachment" type="number" min="0" max="100" step="1" value="2"></label><label>Limit (% of exposure)<input id="xol-limit" type="number" min="0" max="100" step="1" value="8"></label><label>Rate on line (%)<input id="xol-rate" type="number" min="0" step="1" value="10"></label></div><p>Capital is split equally between selected cedents. Unused capital is not redistributed.</p><div id="xol-results" aria-live="polite">Select cedents to model the event.</div><details><summary>How this works</summary><p>One historical, cumulative Ian swath is applied to fictional present-day exposure. Housing units are a proxy, valued at an assumed $300,000 each; threshold damage factors are assumed. A tract midpoint may fall outside its boundary. This is not observed damage or actual claims, and excludes surge and flood.</p><p>The layer pays on cedent event loss above attachment, up to its limit. Investor loss is the funded share; premium is principal × rate on line, and net is premium less investor loss. One event and one fully earned period are shown; fees and other costs are excluded.</p></details></section><details><summary>Sources &amp; assumptions</summary><p class="market-key">Concentration: brighter teal = more exposure. Overlap: amber = one; red = multiple cedents.</p><p>Homes: 2020–2024 Census estimates on 2025 boundaries, including vacant and rented units. Cedents and territories are illustrative. Swaths show storm-lifetime extent, not losses.</p><a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noreferrer">Census ↗</a> · <a href="https://www.floir.gov/tools-and-data/residential-market-share-reports" target="_blank" rel="noreferrer">Florida insurance data ↗</a></details></section><a class="source" href="https://www.nhc.noaa.gov/gis/archive_besttrack_results.php?id=al09&amp;name=Hurricane+IAN&amp;year=2022" target="_blank" rel="noreferrer">NOAA NHC best track & GIS data <span>↗</span></a></main>
+  <section class="exposure"><div class="divider"></div><h2>Where homes are</h2><fieldset class="visual-options"><legend>Visualization options</legend><label><input id="tract-toggle" type="checkbox"> Housing tracts</label></fieldset><p id="tract-status" role="status"></p><button id="tract-retry" type="button" hidden>Retry loading data</button><details><summary>Find a tract</summary><label for="tract-search">Search Florida tract GEOID</label><input id="tract-search" type="search" inputmode="numeric" placeholder="Enter tract GEOID" disabled><div id="tract-results" aria-live="polite"></div><div id="tract-detail" aria-live="polite"></div></details><div class="divider"></div><div class="market-heading"><h2>Fictional cedent market</h2><span class="help"><button type="button" aria-label="About modeled cedents" aria-describedby="market-help">?</button><span id="market-help" role="tooltip">Fictional insurers use modeled housing, not actual policies. Shares include other insurers statewide.</span></span></div><div class="market-controls"><label for="market-seed">Seed</label><input id="market-seed" type="number" min="0" max="4294967295" step="1" value="42"><button id="market-generate" type="button" disabled>Generate</button><label for="market-view">View</label><select id="market-view"><option value="impact">Event impact</option><option value="concentration">Concentration</option><option value="overlap">Overlap</option></select></div><div id="market-legend" aria-live="polite"></div><p id="market-error" role="status"></p><p id="market-residual"></p><div id="cedent-list" aria-label="Select cedents"></div><p id="market-summary" aria-live="polite">Loading market…</p><section class="xol"><div class="divider"></div><h2>Junior XOL scenario</h2><p class="xol-caption">Modeled Ian loss · assumed terms</p><label for="xol-capital">Upfront capital ($)</label><input id="xol-capital" type="number" min="0" step="1000" value="1000000"><div class="xol-terms"><label>Attachment (% of exposure)<input id="xol-attachment" type="number" min="0" max="100" step="1" value="2"></label><label>Limit (% of exposure)<input id="xol-limit" type="number" min="0" max="100" step="1" value="8"></label><label>Rate on line (%)<input id="xol-rate" type="number" min="0" step="1" value="10"></label></div><p>Capital is split equally between selected cedents. Unused capital is not redistributed.</p><div id="xol-results" aria-live="polite">Select cedents to model the event.</div><details><summary>How this works</summary><p>One historical, cumulative Ian swath is applied to fictional present-day exposure. Housing units are a proxy, valued at an assumed $300,000 each; threshold damage factors are assumed. A tract midpoint may fall outside its boundary. This is not observed damage or actual claims, and excludes surge and flood.</p><p>The layer pays on cedent event loss above attachment, up to its limit. Investor loss is the funded share; premium is principal × rate on line, and net is premium less investor loss. One event and one fully earned period are shown; fees and other costs are excluded.</p></details></section><details><summary>Sources &amp; assumptions</summary><p class="market-key">Concentration: brighter teal = more exposure. Overlap: blue = one; purple = multiple cedents. Event impact uses the same tract midpoint and assumed damage factors as the loss model.</p><p>Homes: 2020–2024 Census estimates on 2025 boundaries, including vacant and rented units. Cedents and territories are illustrative. Swaths show storm-lifetime extent, not losses.</p><a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noreferrer">Census ↗</a> · <a href="https://www.floir.gov/tools-and-data/residential-market-share-reports" target="_blank" rel="noreferrer">Florida insurance data ↗</a></details></section><a class="source" href="https://www.nhc.noaa.gov/gis/archive_besttrack_results.php?id=al09&amp;name=Hurricane+IAN&amp;year=2022" target="_blank" rel="noreferrer">NOAA NHC best track & GIS data <span>↗</span></a></main>
   <div class="map-label"><span>HISTORICAL VIEW</span><b>Hurricane Ian</b><small>Atlantic Ocean · 2022</small></div>
   <section class="timeline" aria-label="Storm timeline"><div class="timeline-head"><div><span class="overline">STORM TRACK</span><strong id="point-time">Loading track…</strong></div><div class="timeline-actions"><button id="play" aria-label="Play track">▶</button><span id="point-count"></span></div></div><input id="timeline" aria-label="Track point" type="range" min="0" value="0" step="0.001"><div class="timeline-foot"><span>SEP 22</span><span>SELECTED TRACK POINT · UTC</span><span>OCT 01</span></div></section>
   <div id="error" class="error" role="alert" hidden></div>`;
@@ -63,17 +63,18 @@ function play() {
 }
 Promise.all([data('pts'),data('lin'),data('windswath')]).then(([pts,lin,windData])=>{
   points=pts.features; window.stormSwath=windData; $('#timeline').max=points.length-1;
-  drawSwath(); scheduleXol(); track=L.geoJSON(lin,{style:{color:'#fff',weight:2,opacity:.8,dashArray:'4 6'}}).addTo(map); selectPoint(0);
+  drawSwath(); scheduleXol(); track=L.geoJSON(lin,{pane:'trackPane',style:{color:'#fff',weight:2,opacity:.8,dashArray:'4 6'}}).addTo(map); selectPoint(0);
   $('#timeline').addEventListener('input',e=>{stop();selectPoint(+e.target.value)});
   $('#play').addEventListener('click',play);
   $('#track-toggle').addEventListener('click',e=>{trackVisible=!trackVisible;e.currentTarget.textContent=trackVisible?'Hide track':'Show track';e.currentTarget.setAttribute('aria-pressed',String(trackVisible));if(trackVisible){track.addTo(map)}else{track.remove()}selectPoint(index)});
-}).catch(error=>{stormFailed=true;scheduleXol();console.error(error);$('#error').textContent='Storm data could not be loaded. Check your connection and reload.';$('#error').hidden=false;$('#timeline').disabled=true;$('#play').disabled=true});
+}).catch(error=>{stormFailed=true;updateMarket();scheduleXol();console.error(error);$('#error').textContent='Storm data could not be loaded. Check your connection and reload.';$('#error').hidden=false;$('#timeline').disabled=true;$('#play').disabled=true});
 
 // Load the compact, local Census extract independently of map visibility. Canvas avoids
 // thousands of SVG DOM nodes; polygons remain clickable, with keyboard search.
 let tractData, tractLayer, footprintLayer, footprintRenderer, selection, tractVisible=false, loading, market, summary;
 map.createPane("housingPane").style.zIndex=380;
-map.createPane("footprintPane").style.zIndex=390;
+map.createPane("footprintPane").style.zIndex=430;
+map.createPane('trackPane').style.zIndex=450;
 const selected=new Set();
 const format = n => n.toLocaleString('en-US');
 const tractStatus = $('#tract-status');
@@ -144,10 +145,23 @@ function updateMarket() {
  summary.tracts.forEach((t,i)=>{const county=tractData.features[i].properties.geoid.slice(0,5);countyTotals.set(county,(countyTotals.get(county)||0)+t.value)});
  const largestCounty=Math.max(0,...countyTotals.values());
  $('#market-summary').textContent=`${selected.size} selected · ${(total?100*summary.amount/total:0).toFixed(1)}% of statewide market · Largest cedent ${(summary.amount?100*largest/summary.amount:0).toFixed(1)}%, county ${(summary.amount?100*largestCounty/summary.amount:0).toFixed(1)}% of selection.`;
+ const view=$('#market-view').value;
+ const validCache=xolCache && xolCache.market===market && xolCache.event===window.stormSwath && !stormFailed;
+ const legend=$('#market-legend');
+ if(view==='overlap') legend.innerHTML=`<span><i style="background:#56c9ff"></i>One cedent</span><span><i style="background:#a853f5"></i>Multiple cedents</span>${selected.size<2?'<p>Select at least two cedents to see overlap.</p>':''}`;
+ else if(view==='impact') {
+  if(stormFailed || impactFailed) legend.textContent='Event impact unavailable. Reload or try again.';
+  else if(!selected.size) legend.textContent='Select cedents to see modeled event impact.';
+  else if(!validCache) legend.textContent='Calculating modeled event impact…';
+  else {
+   const loss=summary.tracts.reduce((sum,t,i)=>sum+t.value*300000*xolCache.tracts[i].damageFactor,0);
+   legend.innerHTML=`<span><i style="background:#aab7c4"></i>Outside swath</span><span><i style="background:#f4d35e"></i>34 kt · 1%</span><span><i style="background:#f28c45"></i>50 kt · 5%</span><span><i style="background:#d84360"></i>64 kt · 20%</span><p>Modeled cedent loss: ${money(loss)} · lifetime swath, tract midpoint; not observed damage.</p>`;
+  }
+ } else legend.innerHTML='<span><i style="background:#30e1c2"></i>Brighter = more exposure</span>';
  const byId=new Map(tractData.features.map((f,i)=>[f.properties.geoid,i]));
  if(!selected.size){
   if(footprintLayer)footprintLayer.remove();
-  if(footprintRenderer)map.removeLayer(footprintRenderer);
+  if(footprintRenderer){map.removeLayer(footprintRenderer);footprintRenderer=null;footprintLayer=null;}
   return;
  }
  if(!footprintLayer){
@@ -157,7 +171,11 @@ function updateMarket() {
  footprintLayer.setStyle(f=>{
   const t=summary.tracts[byId.get(f.properties.geoid)];
   if(!t.count)return {stroke:false,fillOpacity:0};
-  if($('#market-view').value==='overlap')return {stroke:false,fillColor:t.count>1?'#e44f45':'#e7a74e',fillOpacity:.55};
+  if(view==='overlap')return {stroke:false,fillColor:t.count>1?'#a853f5':'#56c9ff',fillOpacity:.85};
+  if(view==='impact') {
+   if(!validCache) return {stroke:false,fillOpacity:0};
+   return {stroke:false,fillColor:({0:'#aab7c4',34:'#f4d35e',50:'#f28c45',64:'#d84360'})[xolCache.tracts[byId.get(f.properties.geoid)].threshold],fillOpacity:.9};
+  }
   return {stroke:false,fillColor:'#30e1c2',fillOpacity:.15+.5*Math.sqrt(t.value/max)};
  });
  if(!map.hasLayer(footprintLayer))footprintLayer.addTo(map);
@@ -168,17 +186,17 @@ $('#market-view').addEventListener('change',updateMarket);
 
 // Keep the event independent of visibility and timeline playback. Debouncing avoids
 // repeated expensive swath classification while several controls change together.
-let xolTimer, xolCache;
+let xolTimer, xolCache, impactFailed=false;
 const money = n => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(n);
 function scheduleXol() {
  clearTimeout(xolTimer);
+ impactFailed=false;
  const out=$('#xol-results');
  if(!selected.size){out.textContent='Select cedents to model the event.';return}
  if(stormFailed){out.textContent='Storm data unavailable. Reload to try again.';return}
  if(!tractData || !market || !window.stormSwath){out.textContent='Waiting for storm and housing data…';return}
  const fields=['capital','attachment','limit','rate'].map(k=>$('#xol-'+k));
  const values=fields.map(f=>Number(f.value));
- if(fields.some((f,i)=>f.value.trim()==='' || !Number.isFinite(values[i]) || values[i]<0) || values[1]+values[2]>100){out.textContent='Enter nonnegative values; attachment plus limit cannot exceed 100%.';return}
  out.textContent='Calculating modeled event…';
  xolTimer=setTimeout(()=>{
   try {
@@ -187,8 +205,10 @@ function scheduleXol() {
    // selection and term changes only recalculate the inexpensive layer math.
    if(!xolCache || xolCache.market!==market || xolCache.event!==window.stormSwath){
     const scenario=simulatePortfolio({features:tractData.features,market,event:window.stormSwath,capital:0,positions:market.cedents.map((_,index)=>({index,weight:1,attachmentFraction:0,limitFraction:0,rateOnLine:0}))});
-    xolCache={market,event:window.stormSwath,positions:scenario.positions};
+    xolCache={market,event:window.stormSwath,positions:scenario.positions,tracts:scenario.tracts};
+    updateMarket();
    }
+   if(fields.some((f,i)=>f.value.trim()==='' || !Number.isFinite(values[i]) || values[i]<0) || values[1]+values[2]>100){out.textContent='Enter nonnegative values; attachment plus limit cannot exceed 100%.';return}
    const positions=[...selected].sort((a,b)=>a-b).map(index=>{
     const p=xolCache.positions[index], layerLimit=p.exposure*(limit/100), principal=Math.min(capital/selected.size,layerLimit);
     return {...p,...layerOutcome(p.grossLoss,{attachment:p.exposure*(attachment/100),limit:layerLimit,principal,rateOnLine:rate/100})};
@@ -204,7 +224,7 @@ function scheduleXol() {
    const total={exposure:0,grossLoss:0,attachment:0,limit:0,principal:result.totalPrincipal,investorLoss:result.investorLoss,premium:result.premium,netReturn:result.netReturn};
    for(const p of result.positions) for(const key of ['exposure','grossLoss','attachment','limit']) total[key]+=p[key];
    out.innerHTML=`<div class="xol-card"><strong>Portfolio</strong>${waterfall(total)}<dl>${rows(total)}</dl><p>Unallocated capital: <b>${money(result.unallocatedCapital)}</b></p></div>${result.positions.map(p=>`<details class="xol-card"><summary>${p.name}</summary>${waterfall(p)}<dl>${rows(p)}</dl></details>`).join('')}`;
-  } catch(error){console.error(error);out.textContent='Could not calculate this scenario. Check inputs and try again.'}
+  } catch(error){console.error(error);if(!xolCache || xolCache.market!==market || xolCache.event!==window.stormSwath){impactFailed=true;updateMarket()}out.textContent='Could not calculate this scenario. Check inputs and try again.'}
  },150);
 }
 for(const key of ['capital','attachment','limit','rate']) $('#xol-'+key).addEventListener('input',scheduleXol);

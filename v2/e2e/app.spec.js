@@ -202,7 +202,7 @@ test('XOL results reconcile with the shared Ian engine and stay static while scr
  for(const [label,value] of [['Premium',expected.premium],['Investor loss',expected.loss],['Net',expected.net]]) await expect(portfolio.locator('dl div').filter({has:page.getByText(label,{exact:true})})).toContainText(format(value));
  const before=await page.locator('#xol-results').innerText();
  const panes=await page.evaluate(()=>({footprint:Number(getComputedStyle(document.querySelector('.leaflet-footprint-pane')).zIndex),storm:Number(getComputedStyle(document.querySelector('.leaflet-overlay-pane')).zIndex)}));
- expect(panes.footprint).toBeLessThan(panes.storm);
+ expect(panes.footprint).toBeGreaterThan(panes.storm);
  for(const wind of [34,50,64]) await expect(page.locator(`path.swath-${wind}:visible`).first()).toBeVisible();
  await page.getByRole('slider',{name:'Track point'}).fill('10.5');
  await expect(page.locator('#xol-results')).toHaveText(before,{useInnerText:true});
@@ -246,4 +246,88 @@ test('failed swath is not treated as a no-storm scenario', async ({page})=>{
  await page.getByRole('checkbox',{name:/Cedent 01/}).check();
  await expect(page.locator('#xol-results')).toContainText('Storm data unavailable');
  await expect(page.locator('#xol-results')).not.toContainText('Premium');
+});
+
+test('footprint repaints real pixels after clearing and reselecting', async ({page})=>{
+ await page.goto('/v2/');
+ const cedent=page.getByRole('checkbox',{name:/Cedent 01/});
+ await cedent.check({timeout:30000});
+ const pixels=()=>page.locator('canvas.market-footprint').evaluate(async canvas=>{
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  return canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data.some((v,i)=>i%4===3 && v>0);
+ });
+ await expect.poll(pixels).toBe(true);
+ await cedent.uncheck();
+ await cedent.check();
+ await expect.poll(pixels).toBe(true);
+});
+
+test('event impact displays the shared modeled loss and remains static on scrub', async ({page})=>{
+ await page.goto('/v2/');
+ await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
+ await page.getByRole('checkbox',{name:/Cedent 02/}).check();
+ await page.getByLabel('View',{exact:true}).selectOption('impact');
+ await expect(page.locator('#xol-results')).toContainText('Cedent 02',{timeout:30000});
+ await expect(page.locator('#market-legend')).toContainText('Outside swath');
+ const expected=await page.evaluate(async()=>{
+  const {generateMarket}=await import('/v2/src/market.js');
+  const {simulatePortfolio}=await import('/v2/src/loss.js');
+  const r=await fetch('/v2/data/fl-tracts.bin');
+  const features=(await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).json()).features;
+  const market=generateMarket(features,42);
+  const scenario=simulatePortfolio({features,market,event:window.stormSwath,capital:0,positions:[0,1].map(index=>({index,weight:1,attachmentFraction:0,limitFraction:0,rateOnLine:0}))});
+  const loss=scenario.tracts.reduce((s,t,i)=>s+(market.tracts[i].allocations[0]+market.tracts[i].allocations[1])*300000*t.damageFactor,0);
+  return {loss, thresholds:[...new Set(scenario.tracts.filter((t,i)=>market.tracts[i].allocations[0]+market.tracts[i].allocations[1]>0).map(t=>t.threshold))]};
+ });
+ expect(expected.loss).toBeGreaterThan(0);
+ expect(expected.thresholds.length).toBeGreaterThan(1);
+ const amount=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(expected.loss);
+ await expect(page.locator('#market-legend')).toContainText(amount);
+ await expect(page.locator('#xol-results > .xol-card').first().locator('dl div').filter({has:page.getByText('Cedent event loss',{exact:true})})).toContainText(amount);
+ const before=await page.locator('canvas.market-footprint').evaluate(async c=>{await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));return c.toDataURL()});
+ await page.getByRole('slider',{name:'Track point'}).fill('10.5');
+ expect(await page.locator('canvas.market-footprint').evaluate(c=>c.toDataURL())).toBe(before);
+});
+
+test('overlap legend explains that two cedents are needed', async ({page})=>{
+ await page.goto('/v2/');
+ await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
+ await page.getByLabel('View',{exact:true}).selectOption('overlap');
+ await expect(page.locator('#market-legend')).toContainText('Select at least two');
+ await page.getByRole('checkbox',{name:/Cedent 02/}).check();
+ await expect(page.locator('#market-legend')).toContainText('Multiple cedents');
+});
+
+test('impact reports classification failure instead of zero or perpetual loading', async ({page})=>{
+ await page.route('**/ian-windswath.geojson',route=>route.fulfill({json:{type:'FeatureCollection',features:[{type:'Feature',properties:{RADII:34},geometry:{type:'Point',coordinates:[-81,26]}}]}}));
+ await page.goto('/v2/');
+ await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
+ await page.getByLabel('View',{exact:true}).selectOption('impact');
+ await expect(page.locator('#market-legend')).toContainText('unavailable',{timeout:30000});
+ await expect(page.locator('#xol-results')).toContainText('Could not calculate');
+});
+
+test('impact refreshes on seed and selection even when XOL terms are invalid', async ({page})=>{
+ await page.goto('/v2/');
+ await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
+ await page.getByLabel('View',{exact:true}).selectOption('impact');
+ await expect(page.locator('#market-legend')).toContainText('Modeled cedent loss',{timeout:30000});
+ const before=await page.locator('#market-legend').innerText();
+ await page.getByLabel('Attachment (% of exposure)').fill('101');
+ await expect(page.locator('#xol-results')).toContainText('cannot exceed 100%');
+ await page.getByLabel('Seed',{exact:true}).fill('43');
+ await page.getByRole('button',{name:'Generate'}).click();
+ await expect(page.locator('#market-legend')).toContainText('Modeled cedent loss',{timeout:30000});
+ await expect(page.locator('#market-legend')).not.toHaveText(before,{useInnerText:true});
+ await expect(page.locator('#xol-results')).toContainText('cannot exceed 100%');
+ const seed43=await page.locator('#market-legend').innerText();
+ await page.getByRole('checkbox',{name:/Cedent 02/}).check();
+ await expect(page.locator('#market-legend')).not.toHaveText(seed43,{useInnerText:true});
+});
+
+test('selected exposures show event impact by default', async ({page}) => {
+ await page.goto('/v2/');
+ await expect(page.locator('#market-view')).toHaveValue('impact');
+ await page.getByRole('checkbox',{name:/Cedent 01/}).check();
+ await expect(page.locator('#market-legend')).toContainText('Modeled cedent loss');
 });
