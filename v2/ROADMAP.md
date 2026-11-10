@@ -4,7 +4,7 @@ Each phase ends with a usable release and a pause for review. Future scope may c
 
 - [x] **Phase 1 — Historical hurricane explorer.** Publish a responsive Hurricane Ian map with NOAA NHC historical track, cumulative 34/50/64-knot wind-swath thresholds, timeline playback, attribution, and limitations. Verify both V2 and V1 live.
 - [x] **Phase 2 — Today's exposure and market.** Census tract housing and a seeded fictional cedent market with bounded, overlapping geographic footprints and portfolio selection. Shares are generated from the synthetic model, not reported company market shares.
-- [ ] **Phase 3 — From hurricane to investor.** Apply a transparent illustrative damage model and insurance and reinsurance terms to show exposure → loss → layer → investor capital. Validate with hand-calculated examples.
+- [ ] **Phase 3 — From hurricane to investor (first slice released).** One historical Ian swath event flows through assumed exposure and damage into junior occurrence XOL and investor capital. Individual policy terms, calibrated vulnerability, and broader hazard coverage remain future work.
 - [ ] **Phase 4 — Portfolios, replay and market cycles.** Add diversified cedents and deals, historical season replay, trapped collateral, capital survival, and explainable market-pricing dynamics.
 - [ ] **Phase 5 — Monte Carlo and outcomes.** Run up to 10,000 seeded scenarios using the same event and financial pipeline; present 3-, 5-, and 10-year distributions, downside, survival and comparisons without rendering every storm track.
 
