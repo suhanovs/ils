@@ -110,7 +110,7 @@ function activateStorm(id){
  if(marker)marker.remove();
  activeStatus=!s?'none':!entry || entry.status==='loading'?'loading':entry.swathError?'error':!s.hasSwath?'unavailable':entry.swath?'ready':'error';
  stormFailed=activeStatus==='error';
- $('#active-storm').textContent=s?`Active event: ${stormName(s)}${activeStatus==='unavailable'?' · wind swath unavailable':activeStatus==='error'?' · storm data unavailable':''}`:'No active storm';
+ $('#active-storm').textContent=s?`Active event: ${stormName(s)} · ${s.id}${s.trackSource?.includes('preliminary')?` · GIS track preliminary${s.statusValues?.length?` · status: ${s.statusValues.join(', ')}`:''}`:''}${activeStatus==='unavailable'?' · wind swath unavailable':activeStatus==='error'?' · storm data unavailable':''}`:'No active storm';
  $('#map-storm').textContent=s?stormName(s):'No storm selected';$('#map-storm-detail').textContent=s?`${selectedStorms.size} selected · active event`:'Select storms in Hazard';
  $('.xol-caption').textContent=s?`Active event: ${stormName(s)} · assumed terms`:'Select an active event';
  if(entry?.status==='ready'){

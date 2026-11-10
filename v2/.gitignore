@@ -2,3 +2,9 @@ node_modules/
 dist/
 test-results/
 playwright-report/
+
+__pycache__/
+scripts/storm-snapshot/zips/
+scripts/storm-snapshot/atlantic.txt
+scripts/storm-snapshot/output/
+/.storm-venv/

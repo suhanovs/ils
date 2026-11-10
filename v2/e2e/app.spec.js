@@ -481,8 +481,8 @@ test('reselecting a removed storm keeps selected track colors unique',async ({pa
  await page.getByRole('checkbox',{name:/KATRINA.*2005/i}).first().check();
  await expect(page.locator('path.archive-track')).toHaveCount(2);
  await page.getByRole('button',{name:/Remove Ian.*AL092022/i}).click();
- await page.getByLabel('Search storms').fill('Andrew');
- await page.getByRole('checkbox',{name:/ANDREW.*1992/i}).first().check();
+ await page.getByLabel('Search storms').fill('Harvey');
+ await page.getByRole('checkbox',{name:/HARVEY.*2017/i}).first().check();
  await page.getByLabel('Search storms').fill('Ian');
  await page.getByRole('checkbox',{name:/Ian.*2022/i}).first().check();
  await expect(page.locator('path.archive-track')).toHaveCount(3);
@@ -493,17 +493,21 @@ test('reselecting a removed storm keeps selected track colors unique',async ({pa
 });
 
 
-test('real Pacific antimeridian track and playback use the same short world path',async ({page})=>{
+test('mock antimeridian track and playback use the same short world path',async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ const track=[{time:'2024-01-01T00:00Z',lat:10,lon:178,wind:40},{time:'2024-01-01T06:00Z',lat:10,lon:179,wind:40},{time:'2024-01-01T12:00Z',lat:10,lon:-179,wind:40},{time:'2024-01-01T18:00Z',lat:10,lon:-178,wind:40}];
+ await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms:[{id:'AL012024',name:'Cross',year:2024,basin:'AL',hasSwath:false}]}}));
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL012024:track}))}));
  await page.route('**/src/main.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text())+'\nwindow.__testMap=map;'});});
  await page.goto('/v2/');
- await page.getByLabel('Search storms').fill('EP052023');
- await page.getByRole('checkbox',{name:/EP052023/}).check();
- await expect(page.locator('#active-storm')).toContainText('2023');
+ await page.getByLabel('Search storms').fill('AL012024');
+ await expect(page.getByRole('checkbox',{name:/AL012024/})).toBeChecked();
+ await expect(page.locator('#active-storm')).toContainText('2024');
  const result=await page.evaluate(async()=>{
   const response=await fetch('/v2/data/storms/tracks.bin');
   const tracks=await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
   const chronological=Object.values(tracks).every(track=>track.every((p,i)=>!i || Date.parse(track[i-1].time)<Date.parse(p.time)));
-  const raw=tracks.EP052023; const crossing=raw.findIndex((p,i)=>i && Math.abs(p.lon-raw[i-1].lon)>180);
+  const raw=tracks.AL012024; const crossing=raw.findIndex((p,i)=>i && Math.abs(p.lon-raw[i-1].lon)>180);
   let layer;window.__testMap.eachLayer(l=>{if(l.options?.className==='archive-track' && l.getLatLngs().length===raw.length) layer=l});
   return {chronological, crossing, raw, path:layer?.getLatLngs().map(p=>p.lng)};
  });
@@ -535,4 +539,13 @@ test('eight selected tracks remain distinct after palette overflow and removal',
  expect(new Set(colors).size).toBe(8);
  const chipColors=await page.locator('.storm-chip').evaluateAll(es=>es.map(e=>e.style.getPropertyValue('--track-color')));
  expect(new Set(chipColors)).toEqual(new Set(colors));
+});
+
+test('GIS-only event identifies its preliminary track', async ({page})=>{
+ await page.goto('/v2/');
+ await page.getByLabel('Search storms').fill('AL012026');
+ await page.getByRole('checkbox',{name:/AL012026/}).check();
+ await expect(page.locator('#active-storm')).toContainText('AL012026');
+ await expect(page.locator('#active-storm')).toContainText('preliminary');
+ await expect(page.locator('#active-storm')).toContainText('LO, TS');
 });
