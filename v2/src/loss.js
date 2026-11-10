@@ -62,26 +62,32 @@ export function simulatePortfolio({features,market,event,positions,capital}) {
   if(!Number.isInteger(p.index)||p.index<0||p.index>=market.cedents.length||seen.has(p.index)) throw new RangeError('invalid or duplicate cedent index');
   seen.add(p.index);
   for(const k of ['weight','attachmentFraction','limitFraction','rateOnLine']) nonnegative(p[k],k);
+  for(const k of ['policyDeductibleFraction','policyLimitFraction']) if(p[k]!==undefined) {nonnegative(p[k],k); if(p[k]>1) throw new RangeError(`${k} exceeds 1`);}
   if(p.attachmentFraction+p.limitFraction>1) throw new RangeError('attachment plus limit exceeds exposure');
   totalWeight+=p.weight;
  }
  if(!Number.isFinite(totalWeight)) throw new RangeError('invalid total weight');
- const factors={0:0,34:.01,50:.05,64:.2}, values=positions.map(()=>({units:0,grossLoss:0}));
+ const factors={0:0,34:.01,50:.05,64:.2}, values=positions.map(()=>({units:0,grossDamage:0,deductible:0,coveredLoss:0}));
  const tracts=features.map((feature,i)=>{
   const point=representativePoint(feature.geometry), threshold=classifyPoint(point,event), damageFactor=factors[threshold];
   const allocations=market.tracts[i]?.allocations;
   if(!Array.isArray(allocations)||allocations.length!==market.cedents.length) throw new TypeError('invalid tract allocations');
+  const tractLoss={grossDamage:0,deductible:0,coveredLoss:0};
   positions.forEach((p,j)=>{
    const units=allocations[p.index]; nonnegative(units,'allocation');
-   values[j].units+=units; values[j].grossLoss+=units*300000*damageFactor;
+   const grossDamage=units*300000*damageFactor;
+   const deductible=Math.min(grossDamage,units*300000*(p.policyDeductibleFraction ?? .02));
+   const coveredLoss=Math.min(units*300000*(p.policyLimitFraction ?? 1),grossDamage-deductible);
+   values[j].units+=units; values[j].grossDamage+=grossDamage; values[j].deductible+=deductible; values[j].coveredLoss+=coveredLoss;
+   tractLoss.grossDamage+=grossDamage; tractLoss.deductible+=deductible; tractLoss.coveredLoss+=coveredLoss;
   });
-  return {point,threshold,damageFactor};
+  return {point,threshold,damageFactor,...tractLoss};
  });
  const results=positions.map((p,j)=>{
-  const {units,grossLoss}=values[j], exposure=units*300000;
+  const {units,grossDamage,deductible,coveredLoss}=values[j], exposure=units*300000;
   const attachment=exposure*p.attachmentFraction, limit=exposure*p.limitFraction;
   const budget=totalWeight?capital*p.weight/totalWeight:0, principal=Math.min(limit,budget);
-  return {index:p.index,name:market.cedents[p.index].name,weight:p.weight,units,exposure,grossLoss,budget,...layerOutcome(grossLoss,{attachment,limit,principal,rateOnLine:p.rateOnLine})};
+  return {index:p.index,name:market.cedents[p.index].name,weight:p.weight,units,exposure,grossDamage,grossLoss:grossDamage,deductible,coveredLoss,cedentLoss:coveredLoss,budget,...layerOutcome(coveredLoss,{attachment,limit,principal,rateOnLine:p.rateOnLine})};
  });
  const sum=key=>results.reduce((a,p)=>a+p[key],0);
  const totalPrincipal=sum('principal'), investorLoss=sum('investorLoss'), premium=sum('premium');

@@ -277,13 +277,13 @@ test('event impact displays the shared modeled loss and remains static on scrub'
   const market=generateMarket(features,42);
   const scenario=simulatePortfolio({features,market,event:window.stormSwath,capital:0,positions:[0,1].map(index=>({index,weight:1,attachmentFraction:0,limitFraction:0,rateOnLine:0}))});
   const loss=scenario.tracts.reduce((s,t,i)=>s+(market.tracts[i].allocations[0]+market.tracts[i].allocations[1])*300000*t.damageFactor,0);
-  return {loss, thresholds:[...new Set(scenario.tracts.filter((t,i)=>market.tracts[i].allocations[0]+market.tracts[i].allocations[1]>0).map(t=>t.threshold))]};
+  return {loss, covered:scenario.positions.reduce((s,p)=>s+p.cedentLoss,0), thresholds:[...new Set(scenario.tracts.filter((t,i)=>market.tracts[i].allocations[0]+market.tracts[i].allocations[1]>0).map(t=>t.threshold))]};
  });
  expect(expected.loss).toBeGreaterThan(0);
  expect(expected.thresholds.length).toBeGreaterThan(1);
  const amount=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(expected.loss);
  await expect(page.locator('#market-legend')).toContainText(amount);
- await expect(page.locator('#xol-results > .xol-card').first().locator('dl div').filter({has:page.getByText('Cedent event loss',{exact:true})})).toContainText(amount);
+ await expect(page.locator('#xol-results > .xol-card').first().locator('dl div').filter({has:page.getByText('Cedent event loss',{exact:true})})).toContainText(new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(expected.covered));
  const before=await page.locator('canvas.market-footprint').evaluate(async c=>{await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));return c.toDataURL()});
  await page.getByRole('slider',{name:'Track point'}).fill('10.5');
  expect(await page.locator('canvas.market-footprint').evaluate(c=>c.toDataURL())).toBe(before);
@@ -311,13 +311,13 @@ test('impact refreshes on seed and selection even when XOL terms are invalid', a
  await page.goto('/v2/');
  await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
  await page.getByLabel('View',{exact:true}).selectOption('impact');
- await expect(page.locator('#market-legend')).toContainText('Modeled cedent loss',{timeout:30000});
+ await expect(page.locator('#market-legend')).toContainText('Cedent covered loss',{timeout:30000});
  const before=await page.locator('#market-legend').innerText();
  await page.getByLabel('Attachment (% of exposure)').fill('101');
  await expect(page.locator('#xol-results')).toContainText('cannot exceed 100%');
  await page.getByLabel('Seed',{exact:true}).fill('43');
  await page.getByRole('button',{name:'Generate'}).click();
- await expect(page.locator('#market-legend')).toContainText('Modeled cedent loss',{timeout:30000});
+ await expect(page.locator('#market-legend')).toContainText('Cedent covered loss',{timeout:30000});
  await expect(page.locator('#market-legend')).not.toHaveText(before,{useInnerText:true});
  await expect(page.locator('#xol-results')).toContainText('cannot exceed 100%');
  const seed43=await page.locator('#market-legend').innerText();
@@ -329,5 +329,5 @@ test('selected exposures show event impact by default', async ({page}) => {
  await page.goto('/v2/');
  await expect(page.locator('#market-view')).toHaveValue('impact');
  await page.getByRole('checkbox',{name:/Cedent 01/}).check();
- await expect(page.locator('#market-legend')).toContainText('Modeled cedent loss');
+ await expect(page.locator('#market-legend')).toContainText('Cedent covered loss');
 });
