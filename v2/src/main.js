@@ -1,22 +1,22 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
-import {pointLabel, clampIndex} from './model.js';
+import {clampIndex} from './model.js';
 import {generateMarket, summarizeSelection} from './market.js';
 import {simulatePortfolio, layerOutcome} from './loss.js';
 
 const app = document.querySelector('#app');
 app.innerHTML = `
-  <div id="map" aria-label="Interactive map of Hurricane Ian's historical track and cumulative wind swath"></div>
+  <div id="map" aria-label="Interactive map of selected historical storm tracks and cumulative wind swaths"></div>
   <header class="topbar"><a class="brand" href="/" title="Return to aboutILS"><span class="brand-mark">✳</span><span>about<span>ILS</span><small>STORM ATLAS</small></span></a><span class="header-tag"><i></i> HISTORICAL EXPLORER</span><a class="back" href="/">← <span>Back to aboutILS</span></a></header>
-  <main class="panel"><div class="eyebrow"><span>STORM PROFILE</span><span>ATLANTIC / 2022</span></div><div class="title-row"><div><div class="kicker">NORTH ATLANTIC OCEAN</div><h1>Hurricane Ian</h1><p class="subtitle">A storm in perspective.</p></div><div class="storm-icon">◉</div></div>
-  <div class="badges"><span>2022 SEASON</span><span>AL092022</span><span>BEST TRACK</span></div>
-  <details class="control-section" open><summary>Hazard</summary><div class="section-heading"><div><span class="overline">EXPLORE THE STORM</span><h2>Cumulative wind swath</h2></div></div>
+  <main class="panel"><div class="eyebrow"><span>STORM PROFILE</span><span>HISTORICAL ARCHIVE</span></div><div class="title-row"><div><div class="kicker">HISTORICAL STORMS</div><h1>Storm archive</h1><p class="subtitle">A storm in perspective.</p></div><div class="storm-icon">◉</div></div>
+  <div class="badges"><span>HISTORICAL EVENTS</span><span>BEST TRACK</span></div>
+  <details class="control-section" open><summary>Hazard</summary><label for="storm-search">Search storms</label><input id="storm-search" type="search" placeholder="Name, year or ID"><div id="storm-list" aria-label="Storm archive" aria-live="polite">Loading archive…</div><p id="storm-list-status" role="status"></p><div id="selected-storms" aria-label="Selected storms"></div><p id="active-storm" role="status">No active storm</p><div class="section-heading"><div><span class="overline">EXPLORE THE STORM</span><h2>Cumulative wind swath</h2></div></div>
   <p class="description">Static estimated wind extent over the full storm; not winds at the selected time.</p>
   <div class="swath-legend" aria-label="Cumulative wind thresholds"><span data-swath="34"><i></i>34 kt · 39 mph</span><span data-swath="50"><i></i>50 kt · 58 mph</span><span data-swath="64"><i></i>64 kt · 74 mph</span></div><button id="track-toggle" aria-pressed="true">Hide track</button></details>
-  <section class="exposure"><details class="control-section" open><summary>Exposure</summary><h2>Where homes are</h2><fieldset class="visual-options"><legend>Visualization options</legend><label><input id="tract-toggle" type="checkbox"> Housing tracts</label></fieldset><p id="tract-status" role="status"></p><button id="tract-retry" type="button" hidden>Retry loading data</button><details><summary>Find a tract</summary><label for="tract-search">Search Florida tract GEOID</label><input id="tract-search" type="search" inputmode="numeric" placeholder="Enter tract GEOID" disabled><div id="tract-results" aria-live="polite"></div><div id="tract-detail" aria-live="polite"></div></details></details><details class="control-section" open><summary>Cedents</summary><div class="market-heading"><h2>Fictional cedent market</h2><span class="help"><button type="button" aria-label="About modeled cedents" aria-describedby="market-help">?</button><span id="market-help" role="tooltip">Fictional insurers use modeled housing, not actual policies. Shares include other insurers statewide.</span></span></div><div class="market-controls"><label for="market-seed">Seed</label><input id="market-seed" type="number" min="0" max="4294967295" step="1" value="42"><button id="market-generate" type="button" disabled>Generate</button><label for="market-view">View</label><select id="market-view"><option value="impact">Event impact</option><option value="concentration">Concentration</option><option value="overlap">Overlap</option></select></div><div id="market-legend" aria-live="polite"></div><p id="market-error" role="status"></p><p id="market-residual"></p><div id="cedent-list" aria-label="Select cedents"></div><p id="market-summary" aria-live="polite">Loading market…</p></details><details class="control-section" open><summary>Underwriting</summary><section class="xol"><h2>Junior XOL scenario</h2><p class="xol-caption">Modeled Ian loss · assumed terms</p><label for="xol-capital">Upfront capital ($)</label><input id="xol-capital" type="number" min="0" step="1000" value="1000000"><div class="xol-terms policy-terms"><label>Policy deductible (% of replacement value)<input id="xol-policy-deductible" type="number" min="0" max="100" step="1" value="2"></label><label>Policy limit (% of replacement value)<input id="xol-policy-limit" type="number" min="0" max="100" step="1" value="100"></label></div><div class="xol-terms"><label>Attachment (% of exposure)<input id="xol-attachment" type="number" min="0" max="100" step="1" value="2"></label><label>Limit (% of exposure)<input id="xol-limit" type="number" min="0" max="100" step="1" value="8"></label><label>Rate on line (%)<input id="xol-rate" type="number" min="0" step="1" value="10"></label></div><p>Capital is split equally between selected cedents. Unused capital is not redistributed.</p><div id="xol-status" role="status"></div><div id="xol-results" aria-live="polite">Select cedents to model the event.</div><details><summary>How this works</summary><p>One historical, cumulative Ian swath is applied to fictional present-day exposure. Housing units are a proxy, valued at an assumed $300,000 each; threshold damage factors are assumed. A tract midpoint may fall outside its boundary. This is not observed damage or actual claims, and excludes surge and flood.</p><p>Policy terms apply to deterministic mean damage per unit, not a distribution of individual claims.</p><p>The layer pays on cedent event loss above attachment, up to its limit. Investor loss is the funded share; premium is principal × rate on line, and net is premium less investor loss. One event and one fully earned period are shown; fees and other costs are excluded.</p></details></section></details><details><summary>Sources &amp; assumptions</summary><p class="market-key">Concentration: brighter teal = more exposure. Overlap: blue = one; purple = multiple cedents. Event impact uses the same tract midpoint and assumed damage factors as the loss model.</p><p>Homes: 2020–2024 Census estimates on 2025 boundaries, including vacant and rented units. Cedents and territories are illustrative. Swaths show storm-lifetime extent, not losses.</p><a href="https://www.census.gov/programs-surveys/acs" target="_blank" rel="noreferrer">Census ↗</a> · <a href="https://www.floir.gov/tools-and-data/residential-market-share-reports" target="_blank" rel="noreferrer">Florida insurance data ↗</a></details></section><a class="source" href="https://www.nhc.noaa.gov/gis/archive_besttrack_results.php?id=al09&amp;name=Hurricane+IAN&amp;year=2022" target="_blank" rel="noreferrer">NOAA NHC best track & GIS data <span>↗</span></a></main>
-  <div class="map-label"><span>HISTORICAL VIEW</span><b>Hurricane Ian</b><small>Atlantic Ocean · 2022</small></div>
-  <section class="timeline" aria-label="Storm timeline"><div class="timeline-head"><div><span class="overline">STORM TRACK</span><strong id="point-time">Loading track…</strong></div><div class="timeline-actions"><button id="play" aria-label="Play track">▶</button><span id="point-count"></span></div></div><input id="timeline" aria-label="Track point" type="range" min="0" value="0" step="0.001"><div class="timeline-foot"><span>SEP 22</span><span>SELECTED TRACK POINT · UTC</span><span>OCT 01</span></div></section>
+  <section class="exposure"><details class="control-section" open><summary>Exposure</summary><h2>Where homes are</h2><fieldset class="visual-options"><legend>Visualization options</legend><label><input id="tract-toggle" type="checkbox"> Housing tracts</label></fieldset><p id="tract-status" role="status"></p><button id="tract-retry" type="button" hidden>Retry loading data</button><details><summary>Find a tract</summary><label for="tract-search">Search Florida tract GEOID</label><input id="tract-search" type="search" inputmode="numeric" placeholder="Enter tract GEOID" disabled><div id="tract-results" aria-live="polite"></div><div id="tract-detail" aria-live="polite"></div></details></details><details class="control-section" open><summary>Cedents</summary><div class="market-heading"><h2>Fictional cedent market</h2><span class="help"><button type="button" aria-label="About modeled cedents" aria-describedby="market-help">?</button><span id="market-help" role="tooltip">Fictional insurers use modeled housing, not actual policies. Shares include other insurers statewide.</span></span></div><div class="market-controls"><label for="market-seed">Seed</label><input id="market-seed" type="number" min="0" max="4294967295" step="1" value="42"><button id="market-generate" type="button" disabled>Generate</button><label for="market-view">View</label><select id="market-view"><option value="impact">Event impact</option><option value="concentration">Concentration</option><option value="overlap">Overlap</option></select></div><div id="market-legend" aria-live="polite"></div><p id="market-error" role="status"></p><p id="market-residual"></p><div id="cedent-list" aria-label="Select cedents"></div><p id="market-summary" aria-live="polite">Loading market…</p></details><details class="control-section" open><summary>Underwriting</summary><section class="xol"><h2>Junior XOL scenario</h2><p class="xol-caption">Active event loss · assumed terms</p><label for="xol-capital">Upfront capital ($)</label><input id="xol-capital" type="number" min="0" step="1000" value="1000000"><div class="xol-terms policy-terms"><label>Policy deductible (% of replacement value)<input id="xol-policy-deductible" type="number" min="0" max="100" step="1" value="2"></label><label>Policy limit (% of replacement value)<input id="xol-policy-limit" type="number" min="0" max="100" step="1" value="100"></label></div><div class="xol-terms"><label>Attachment (% of exposure)<input id="xol-attachment" type="number" min="0" max="100" step="1" value="2"></label><label>Limit (% of exposure)<input id="xol-limit" type="number" min="0" max="100" step="1" value="8"></label><label>Rate on line (%)<input id="xol-rate" type="number" min="0" step="1" value="10"></label></div><p>Capital is split equally between selected cedents. Unused capital is not redistributed.</p><div id="xol-status" role="status"></div><div id="xol-results" aria-live="polite">Select cedents to model the event.</div><details><summary>How this works</summary><p>One historical, cumulative Ian swath is applied to fictional present-day exposure. Housing units are a proxy, valued at an assumed $300,000 each; threshold damage factors are assumed. A tract midpoint may fall outside its boundary. This is not observed damage or actual claims, and excludes surge and flood.</p><p>Policy terms apply to deterministic mean damage per unit, not a distribution of individual claims.</p><p>The layer pays on cedent event loss above attachment, up to its limit. Investor loss is the funded share; premium is principal × rate on line, and net is premium less investor loss. One event and one fully earned period are shown; fees and other costs are excluded.</p></details></section></details></section></main>
+  <div class="map-label"><span>HISTORICAL VIEW</span><b id="map-storm">No storm selected</b><small id="map-storm-detail">Select storms in Hazard</small></div>
+  <section class="timeline" aria-label="Storm timeline"><div class="timeline-head"><div><span class="overline">STORM TRACK</span><strong id="point-time">Loading track…</strong></div><div class="timeline-actions"><button id="play" aria-label="Play track">▶</button><span id="point-count"></span></div></div><input id="timeline" aria-label="Track point" type="range" min="0" value="0" step="0.001"><div class="timeline-foot"><span id="timeline-start"></span><span>ACTIVE STORM TRACK POINT · UTC</span><span id="timeline-end"></span></div></section>
   <div id="error" class="error" role="alert" hidden></div>`;
 
 const map = L.map('map', {zoomControl:false, minZoom:3}).setView([25.5,-81], 5);
@@ -25,23 +25,113 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19,attrib
 const $ = s => document.querySelector(s);
 const colors = {34:'#e3af58',50:'#eb845b',64:'#d85b52'};
 const labels = {34:'34 kt · tropical storm force',50:'50 kt · sustained wind',64:'64 kt · hurricane force'};
-let trackVisible=true, index=0, points=[], swath, track, marker, timer, stormFailed=false;
-const data = name => fetch(`${import.meta.env.BASE_URL}data/ian-${name}.geojson`).then(r=>{if(!r.ok) throw new Error(`${name}: HTTP ${r.status}`); return r.json()});
-function drawSwath() {
-  if(swath) swath.remove();
-  swath=L.layerGroup([34,50,64].map(wind=>L.geoJSON(window.stormSwath,{filter:f=>f.properties.RADII===wind,style:{className:`swath-layer swath-${wind}`,color:colors[wind],weight:1,opacity:.9,fillColor:colors[wind],fillOpacity:.38},interactive:false}))).addTo(map);
-  if(trackVisible && track) track.bringToFront();
+let trackVisible=true, index=0, points=[], marker, timer, stormFailed=false;
+let storms=[], activeId=null, activeStatus='loading';
+const selectedStorms=new Set(), stormCache=new Map();
+let tracksPromise;
+const trackPalette=['#72e5e0','#f5c76b','#eaa8fa','#9fdc78','#ff9b9b','#91b9ff','#ffd4a0','#c4c4ff'];
+const stormColors=new Map();
+function trackColor(id){return stormColors.get(id)}
+function assignTrackColors(){
+ const used=new Set();
+ for(const id of selectedStorms){
+  let color=stormColors.get(id);
+  if(!color || used.has(color)) color=trackPalette.find(c=>!used.has(c)) || color || trackPalette[used.size%trackPalette.length];
+  stormColors.set(id,color);used.add(color);
+  stormCache.get(id)?.track?.setStyle({color});
+ }
 }
-const pointTime = p => {const s=String(p.DTG);return Date.UTC(+s.slice(0,4),+s.slice(4,6)-1,+s.slice(6,8),+s.slice(8,10));};
+const stormName=s=>`${s.name} (${s.year})`;
+async function compressed(path) {
+ const r=await fetch(`${import.meta.env.BASE_URL}data/storms/${path}`);
+ if(!r.ok) throw new Error(`HTTP ${r.status}`);
+ if(!('DecompressionStream' in window)) throw new Error('Gzip decompression unavailable');
+ return new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).json();
+}
+function loadTracks(){if(!tracksPromise)tracksPromise=compressed('tracks.bin').catch(e=>{tracksPromise=null;throw e});return tracksPromise}
+function loadStorm(s){
+ let entry=stormCache.get(s.id); if(entry) return entry;
+ entry={status:'loading'}; stormCache.set(s.id,entry);
+ entry.promise=Promise.allSettled([loadTracks(),s.hasSwath?compressed(`swaths/${encodeURIComponent(s.id)}.bin`):Promise.resolve(null)]).then(([tracks,swath])=>{
+  if(tracks.status==='fulfilled' && Array.isArray(tracks.value[s.id]) && tracks.value[s.id].length) entry.raw=tracks.value[s.id]; else entry.trackError=true;
+  if(swath.status==='fulfilled' && (!s.hasSwath || swath.value)) entry.swath=swath.value; else entry.swathError=true;
+  entry.status='ready';
+  if(selectedStorms.has(s.id)) {renderStormLayers(s,entry);if(activeId===s.id)activateStorm(s.id);else renderSelected()}
+ }); return entry;
+}
+function renderStormLayers(s,entry){
+ if(!entry.unwrapped && entry.raw?.length){let previous=map.getCenter().lng;entry.unwrapped=entry.raw.map(p=>{const lon=p.lon+360*Math.round((previous-p.lon)/360);previous=lon;return {...p,lon}})}
+ if(!entry.track && entry.unwrapped?.length){entry.track=L.polyline(entry.unwrapped.map(p=>[p.lat,p.lon]),{pane:'trackPane',className:'archive-track',color:trackColor(s.id),weight:2,opacity:.8,dashArray:'4 6',interactive:false});}
+ if(!entry.swathLayer && entry.swath) entry.swathLayer=L.layerGroup([34,50,64].map(wind=>L.geoJSON(entry.swath,{filter:f=>f.properties.RADII===wind,style:{className:`swath-layer swath-${wind}`,color:colors[wind],weight:1,opacity:.9,fillColor:colors[wind],fillOpacity:.38},interactive:false})));
+ if(entry.swathLayer)entry.swathLayer.addTo(map); if(entry.track && trackVisible)entry.track.addTo(map);
+}
+function removeStormLayers(entry){entry?.track?.remove();entry?.swathLayer?.remove()}
+let archiveMatches=[], archiveShown=0;
+const archiveMore=document.createElement('button');
+archiveMore.type='button';archiveMore.id='archive-more';archiveMore.textContent='Show more storms';archiveMore.setAttribute('aria-controls','storm-list');
+$('#storm-list').after(archiveMore);
+function appendArchive(){
+ const list=$('#storm-list'), start=archiveShown, fragment=document.createDocumentFragment();
+ for(const s of archiveMatches.slice(start,start+80)) {const label=document.createElement('label'), input=document.createElement('input'), text=document.createElement('span');input.type='checkbox';input.checked=selectedStorms.has(s.id);text.textContent=`${s.name} · ${s.year} · ${s.id}`;label.append(input,text);fragment.append(label);input.addEventListener('change',()=>toggleStorm(s,input.checked));}
+ list.append(fragment);archiveShown=Math.min(start+80,archiveMatches.length);
+ const done=archiveShown>=archiveMatches.length, hadFocus=document.activeElement===archiveMore;
+ archiveMore.hidden=done && !hadFocus;
+ archiveMore.textContent=done?'All storms shown':'Show more storms';
+ archiveMore.setAttribute('aria-disabled',String(done));
+ $('#storm-list-status').textContent=archiveMatches.length?`Showing ${archiveShown} of ${archiveMatches.length} storms`:'No matching storms.';
+}
+archiveMore.addEventListener('click',()=>{if(archiveShown<archiveMatches.length)appendArchive()});
+function renderArchive(){
+ const query=$('#storm-search').value.trim().toLowerCase();
+ archiveMatches=storms.filter(s=>`${s.name} ${s.year} ${s.id} ${s.basin}`.toLowerCase().includes(query));
+ archiveShown=0;$('#storm-list').replaceChildren();appendArchive();
+}
+function renderSelected(){
+ const list=$('#selected-storms');list.replaceChildren();
+ for(const id of selectedStorms){
+  const s=storms.find(x=>x.id===id), entry=stormCache.get(id), chip=document.createElement('span'), b=document.createElement('button'), remove=document.createElement('button');
+  chip.className='storm-chip';chip.style.setProperty('--track-color',trackColor(id));
+  b.type='button';b.className='storm-chip-select';b.textContent=`${stormName(s)} · ${s.id}`+(id===activeId?' · active':'');b.setAttribute('aria-pressed',String(id===activeId));b.addEventListener('click',()=>activateStorm(id));
+  remove.type='button';remove.className='storm-chip-remove';remove.textContent='×';remove.setAttribute('aria-label',`Remove ${stormName(s)} · ${s.id}`);remove.addEventListener('click',()=>toggleStorm(s,false));
+  chip.append(b,remove);
+  if(entry?.trackError || entry?.swathError){const status=document.createElement('span');status.className='storm-chip-error';status.textContent=entry.trackError && entry.swathError?'Track and swath unavailable':entry.trackError?'Track unavailable':'Swath unavailable';chip.append(status);const retry=document.createElement('button');retry.type='button';retry.textContent='Retry';retry.setAttribute('aria-label',`Retry data for ${stormName(s)} · ${s.id}`);retry.addEventListener('click',()=>{removeStormLayers(entry);stormCache.delete(id);if(entry.trackError)tracksPromise=null;loadStorm(s);if(activeId===id)activateStorm(id);else renderSelected()});chip.append(retry)}
+  list.append(chip);
+ }
+}
+function toggleStorm(s,on){
+ if(on){selectedStorms.add(s.id);assignTrackColors();const entry=loadStorm(s);if(entry.status==='ready')renderStormLayers(s,entry);activateStorm(s.id)}
+ else{selectedStorms.delete(s.id);assignTrackColors();removeStormLayers(stormCache.get(s.id));if(activeId===s.id)activateStorm([...selectedStorms].at(-1)||null)}
+ renderSelected();
+ for(const label of $('#storm-list').querySelectorAll('label')) if(label.textContent.includes(s.id)) label.querySelector('input').checked=on;
+ if(activeId && activeId!==s.id) $('#map-storm-detail').textContent=`${selectedStorms.size} selected · active event`;
+}
+function activateStorm(id){
+ stop();activeId=id;const s=storms.find(x=>x.id===id), entry=stormCache.get(id);window.stormSwath=null;points=[];index=0;
+ if(marker)marker.remove();
+ activeStatus=!s?'none':!entry || entry.status==='loading'?'loading':entry.swathError?'error':!s.hasSwath?'unavailable':entry.swath?'ready':'error';
+ stormFailed=activeStatus==='error';
+ $('#active-storm').textContent=s?`Active event: ${stormName(s)}${activeStatus==='unavailable'?' · wind swath unavailable':activeStatus==='error'?' · storm data unavailable':''}`:'No active storm';
+ $('#map-storm').textContent=s?stormName(s):'No storm selected';$('#map-storm-detail').textContent=s?`${selectedStorms.size} selected · active event`:'Select storms in Hazard';
+ $('.xol-caption').textContent=s?`Active event: ${stormName(s)} · assumed terms`:'Select an active event';
+ if(entry?.status==='ready'){
+  window.stormSwath=entry.swath || null;
+  points=(entry.unwrapped||[]).map(p=>({geometry:{coordinates:[p.lon,p.lat]},properties:{time:p.time,INTENSITY:p.wind}}));
+ }
+ $('#timeline').disabled=points.length<2;$('#play').disabled=points.length<2;$('#timeline').max=Math.max(0,points.length-1);
+ $('#timeline-start').textContent=points.length?String(entry.raw[0].time).slice(0,10):'';$('#timeline-end').textContent=points.length?String(entry.raw.at(-1).time).slice(0,10):'';
+ if(points.length)selectPoint(0);else {$('#point-time').textContent=entry?.status==='ready'?'Track unavailable':s?'Loading track…':'Select a storm';$('#point-count').textContent=''}
+ renderSelected();updateMarket();scheduleXol();
+}
+const pointTime = p => Date.parse(p.time);
 function selectPoint(i) {
   index=clampIndex(i,points.length); const lo=Math.floor(index), hi=Math.min(lo+1,points.length-1), f=points[lo], next=points[hi], t=index-lo;
   const lerp=(a,b)=>a+(b-a)*t;
   const time=lerp(pointTime(f.properties),pointTime(next.properties));
-  const intensity=lerp(f.properties.INTENSITY,next.properties.INTENSITY);
-  $('#timeline').value=index; $('#point-time').textContent=t<0.001?pointLabel(f.properties):`${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'UTC'}).format(time)} UTC · ${intensity.toFixed(1)} kt`;
+  const intensity=f.properties.INTENSITY==null || (t>=0.001 && next.properties.INTENSITY==null) ? null : lerp(f.properties.INTENSITY,next.properties.INTENSITY);
+  $('#timeline').value=index; $('#point-time').textContent=`${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'UTC'}).format(time)} UTC · ${intensity==null?'wind unavailable':`${t<0.001?intensity:intensity.toFixed(1)} kt`}`;
   $('#point-count').textContent=t<0.001?`${lo+1} / ${points.length}`:'Interpolated';
   const coords=[lerp(f.geometry.coordinates[1],next.geometry.coordinates[1]),lerp(f.geometry.coordinates[0],next.geometry.coordinates[0])];
-  const hue=Math.max(0,45-Math.max(0,intensity-30)*.38);
+  const hue=Math.max(0,45-Math.max(0,(intensity??30)-30)*.38);
   if(trackVisible) {
     if(!marker) marker=L.marker(coords,{interactive:false,icon:L.divIcon({className:'storm-marker',html:'<span class="storm-symbol"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="currentColor" d="M20 3C9 3 3 10 2 20c3-5 8-8 14-8-3 2-5 5-5 8 0 5 4 9 9 9 4 0 7-2 9-6 1 8-5 14-14 14 12 2 23-6 23-18C38 10 30 3 20 3Zm0 12a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg></span>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(map);
     else {marker.setLatLng(coords);if(!map.hasLayer(marker))marker.addTo(map)}
@@ -61,13 +151,14 @@ function play() {
   }
   timer=requestAnimationFrame(frame);
 }
-Promise.all([data('pts'),data('lin'),data('windswath')]).then(([pts,lin,windData])=>{
-  points=pts.features; window.stormSwath=windData; $('#timeline').max=points.length-1;
-  drawSwath(); scheduleXol(); track=L.geoJSON(lin,{pane:'trackPane',style:{color:'#fff',weight:2,opacity:.8,dashArray:'4 6'}}).addTo(map); selectPoint(0);
-  $('#timeline').addEventListener('input',e=>{stop();selectPoint(+e.target.value)});
-  $('#play').addEventListener('click',play);
-  $('#track-toggle').addEventListener('click',e=>{trackVisible=!trackVisible;e.currentTarget.textContent=trackVisible?'Hide track':'Show track';e.currentTarget.setAttribute('aria-pressed',String(trackVisible));if(trackVisible){track.addTo(map)}else{track.remove()}selectPoint(index)});
-}).catch(error=>{stormFailed=true;updateMarket();scheduleXol();console.error(error);$('#error').textContent='Storm data could not be loaded. Check your connection and reload.';$('#error').hidden=false;$('#timeline').disabled=true;$('#play').disabled=true});
+$('#timeline').addEventListener('input',e=>{stop();if(points.length)selectPoint(+e.target.value)});
+$('#play').addEventListener('click',play);
+$('#track-toggle').addEventListener('click',e=>{trackVisible=!trackVisible;e.currentTarget.textContent=trackVisible?'Hide track':'Show track';e.currentTarget.setAttribute('aria-pressed',String(trackVisible));for(const id of selectedStorms){const t=stormCache.get(id)?.track;if(t){if(trackVisible)t.addTo(map);else t.remove()}}if(points.length)selectPoint(index)});
+$('#storm-search').addEventListener('input',renderArchive);
+fetch(`${import.meta.env.BASE_URL}data/storms/catalog.json`).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()}).then(data=>{
+ storms=data.storms.slice().sort((a,b)=>b.year-a.year || a.name.localeCompare(b.name));renderArchive();
+ const initial=storms.find(s=>s.id==='AL092022')||storms[0];if(initial)toggleStorm(initial,true);else activateStorm(null);
+}).catch(error=>{console.error(error);activateStorm(null);activeStatus='error';stormFailed=true;$('#storm-list').textContent='Storm archive unavailable. Reload to try again.';updateMarket();scheduleXol()});
 
 // Load the compact, local Census extract independently of map visibility. Canvas avoids
 // thousands of SVG DOM nodes; polygons remain clickable, with keyboard search.
@@ -151,7 +242,7 @@ function updateMarket() {
  const legend=$('#market-legend');
  if(view==='overlap') legend.innerHTML=`<span><i style="background:#56c9ff"></i>One cedent</span><span><i style="background:#a853f5"></i>Multiple cedents</span>${selected.size<2?'<p>Select at least two cedents to see overlap.</p>':''}`;
  else if(view==='impact') {
-  if(stormFailed || impactFailed) legend.textContent='Event impact unavailable. Reload or try again.';
+  if(stormFailed || impactFailed || activeStatus==='unavailable' || activeStatus==='none') legend.textContent='Event impact unavailable for the active storm.';
   else if(!selected.size) legend.textContent='Select cedents to see modeled event impact.';
   else if(!validCache) legend.textContent='Calculating modeled event impact…';
   else {
@@ -215,7 +306,8 @@ function scheduleXol() {
  out.style.minHeight=`${Math.max(out.offsetHeight,parseFloat(out.style.minHeight)||0)}px`;
  const clear=message=>{status.textContent='';out.removeAttribute('aria-busy');out.textContent=message};
  if(!selected.size){clear('Select cedents to model the event.');return}
- if(stormFailed){clear('Storm data unavailable. Reload to try again.');return}
+ if(activeStatus==='none' || activeStatus==='unavailable'){clear('Event loss unavailable: no wind swath for the active storm.');return}
+ if(stormFailed){clear('Storm data unavailable. Use Retry on the selected event.');return}
  if(!tractData || !market || !window.stormSwath){clear('Waiting for storm and housing data…');return}
  const fields=['capital','attachment','limit','rate'].map(k=>$('#xol-'+k));
  const values=fields.map(f=>Number(f.value));
@@ -252,7 +344,7 @@ function scheduleXol() {
    for(const p of result.positions) for(const key of ['exposure','grossDamage','deductible','uncovered','cedentLoss','cededLoss','attachment','limit']) total[key]+=p[key];
    const openNames=new Set([...out.querySelectorAll('details[open] summary')].map(el=>el.textContent));
    const focusedName=out.contains(document.activeElement) ? document.activeElement.textContent : null;
-   out.innerHTML=`<div class="xol-card"><strong>Portfolio</strong>${waterfall(total)}<dl>${rows(total)}</dl><p>Unallocated capital: <b>${money(result.unallocatedCapital)}</b></p></div>${result.positions.map(p=>`<details class="xol-card"${openNames.has(p.name)?' open':''}><summary>${p.name}</summary>${waterfall(p)}<dl>${rows(p)}</dl></details>`).join('')}`;
+   out.innerHTML=`<div class="xol-card"><strong>Portfolio · ${stormName(storms.find(s=>s.id===activeId))}</strong>${waterfall(total)}<dl>${rows(total)}</dl><p>Unallocated capital: <b>${money(result.unallocatedCapital)}</b></p></div>${result.positions.map(p=>`<details class="xol-card"${openNames.has(p.name)?' open':''}><summary>${p.name}</summary>${waterfall(p)}<dl>${rows(p)}</dl></details>`).join('')}`;
    if(focusedName) [...out.querySelectorAll('summary')].find(el=>el.textContent===focusedName)?.focus({preventScroll:true});
    status.textContent='';out.removeAttribute('aria-busy');
   } catch(error){console.error(error);if(!xolCache || xolCache.market!==market || xolCache.event!==window.stormSwath){impactFailed=true;updateMarket()}clear('Could not calculate this scenario. Check inputs and try again.')}

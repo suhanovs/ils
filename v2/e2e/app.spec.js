@@ -28,9 +28,9 @@ test('failed automatic tract load can be retried without enabling housing', asyn
 });
 test('explores the actual Ian track and static cumulative swaths', async ({page}) => {
   await page.goto('/v2/');
-  await expect(page.getByRole('heading', {name:'Hurricane Ian'})).toBeVisible();
+  await expect(page.getByRole('heading', {name:'Storm archive'})).toBeVisible();
   await expect(page.getByText('Cumulative wind swath')).toBeVisible();
-  await expect(page.locator('.leaflet-interactive').first()).toBeVisible();
+  await expect(page.locator('.archive-track').first()).toBeVisible();
   const before = await page.locator('#point-time').textContent();
   await page.getByRole('slider', {name:'Track point'}).fill('10');
   await expect(page.locator('#point-time')).not.toHaveText(before);
@@ -83,7 +83,7 @@ test('explains the map in plain language without legalistic warnings', async ({p
   await expect(page.getByRole('heading',{name:'Where homes are'})).toBeVisible();
   await expect(page.getByText(/Static estimated wind extent/)).toBeVisible();
   await expect(page.getByText('Read this map carefully')).toHaveCount(0);
-  await expect(page.getByText('Sources & assumptions')).toBeVisible();
+  await expect(page.getByText('Sources & assumptions')).toHaveCount(0);
 });
 
 for (const width of [1280,375]) {
@@ -241,7 +241,7 @@ test('regenerating a selected market uses the new seed for XOL', async ({page})=
 });
 
 test('failed swath is not treated as a no-storm scenario', async ({page})=>{
- await page.route('**/ian-windswath.geojson', route=>route.abort());
+ await page.route('**/storms/swaths/AL092022.bin', route=>route.abort());
  await page.goto('/v2/');
  await page.getByRole('checkbox',{name:'Housing tracts'}).check();
  await page.getByRole('checkbox',{name:/Cedent 01/}).check();
@@ -300,7 +300,8 @@ test('overlap legend explains that two cedents are needed', async ({page})=>{
 });
 
 test('impact reports classification failure instead of zero or perpetual loading', async ({page})=>{
- await page.route('**/ian-windswath.geojson',route=>route.fulfill({json:{type:'FeatureCollection',features:[{type:'Feature',properties:{RADII:34},geometry:{type:'Point',coordinates:[-81,26]}}]}}));
+ const {gzipSync}=await import('node:zlib');
+ await page.route('**/storms/swaths/AL092022.bin',route=>route.fulfill({body:gzipSync(JSON.stringify({type:'FeatureCollection',features:[{type:'Feature',properties:{RADII:34},geometry:{type:'Point',coordinates:[-81,26]}}]}))}));
  await page.goto('/v2/');
  await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
  await page.getByLabel('View',{exact:true}).selectOption('impact');
@@ -331,4 +332,207 @@ test('selected exposures show event impact by default', async ({page}) => {
  await expect(page.locator('#market-view')).toHaveValue('impact');
  await page.getByRole('checkbox',{name:/Cedent 01/}).check();
  await expect(page.locator('#market-legend')).toContainText('Cedent covered loss');
+});
+
+test('source blocks are not in the controls', async ({page}) => {
+ await page.goto('/v2/');
+ await expect(page.getByText('Sources & assumptions')).toHaveCount(0);
+ await expect(page.getByRole('link',{name:/NOAA NHC best track/})).toHaveCount(0);
+});
+
+test('archive selects multiple storms and unavailable swaths never produce zero loss', async ({page}) => {
+ const {gzipSync}=await import('node:zlib');
+ const storms=[{id:'AL012024',name:'Alpha',year:2024,basin:'AL',hasSwath:false},{id:'AL092022',name:'Ian',year:2022,basin:'AL',hasSwath:true}];
+ await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms}}));
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(Buffer.from(JSON.stringify(Object.fromEntries(storms.map(s=>[s.id,[{time:'2022-09-23T00:00:00Z',lat:25,lon:-81,wind:40},{time:'2022-09-23T06:00:00Z',lat:26,lon:-80,wind:50}]])))))}));
+ await page.route('**/data/storms/swaths/AL092022.bin',async r=>r.fulfill({body:gzipSync(await (await import('node:fs/promises')).readFile('public/data/ian-windswath.geojson'))}));
+ await page.goto('/v2/');
+ await expect(page.getByLabel('Search storms')).toBeVisible();
+ await page.getByLabel('Search storms').fill('Alpha');
+ await page.getByRole('checkbox',{name:/Alpha.*2024/}).check();
+ await expect(page.locator('#active-storm')).toContainText('Alpha');
+ await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
+ await expect(page.locator('#xol-results')).toContainText('unavailable');
+ await expect(page.locator('#market-legend')).toContainText('unavailable');
+ await expect(page.locator('#xol-results')).not.toContainText('Premium');
+ await page.getByLabel('Search storms').fill('Ian');
+ await page.getByRole('checkbox',{name:/Ian.*2022/}).check();
+ await page.locator('#selected-storms').getByRole('button',{name:/Ian/}).first().click();
+ await expect(page.locator('#selected-storms')).toContainText('Alpha');
+ await expect(page.locator('#selected-storms')).toContainText('Ian');
+ await expect(page.locator('#active-storm')).toContainText('Ian');
+ await expect(page.locator('#xol-results')).toContainText('Investor loss',{timeout:30000});
+});
+
+test('timeline preserves observation minutes and missing wind', async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms:[{id:'AL012024',name:'Test',year:2024,basin:'AL',hasSwath:false}]}}));
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL012024:[{time:'2024-09-01T03:30:00Z',lat:25,lon:-81,wind:null},{time:'2024-09-01T06:30:00Z',lat:26,lon:-80,wind:50}]}))}));
+ await page.goto('/v2/');
+ await expect(page.locator('#point-time')).toContainText('03:30');
+ await expect(page.locator('#point-time')).toContainText('wind unavailable');
+});
+
+test('deselected storm does not reappear when its delayed data arrives', async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ const storms=[{id:'AL092022',name:'Ian',year:2022,basin:'AL',hasSwath:true},{id:'AL012024',name:'Alpha',year:2024,basin:'AL',hasSwath:false}];
+ await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms}}));
+ const track=[{time:'2022-09-23T00:00:00Z',lat:25,lon:-81,wind:40},{time:'2022-09-23T06:00:00Z',lat:26,lon:-80,wind:50}];
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL092022:track,AL012024:track}))}));
+ let release;const gate=new Promise(r=>release=r);
+ await page.route('**/data/storms/swaths/AL092022.bin',async r=>{await gate;await r.fulfill({body:gzipSync(await (await import('node:fs/promises')).readFile('public/data/ian-windswath.geojson'))})});
+ await page.goto('/v2/');
+ await page.getByLabel('Search storms').fill('Ian');
+ await page.getByRole('checkbox',{name:/Ian/}).uncheck();
+ await page.getByLabel('Search storms').fill('Alpha');
+ await page.getByRole('checkbox',{name:/Alpha/}).check();
+ release();
+ await expect(page.locator('#point-count')).toHaveText('1 / 2');
+ await page.waitForTimeout(300);
+ await expect(page.locator('#active-storm')).toContainText('Alpha');
+ await expect(page.locator('path.swath-layer')).toHaveCount(0);
+ await expect(page.locator('path.archive-track')).toHaveCount(1);
+});
+
+
+test('selected tracks have stable distinct colors and removable accessible chips', async ({page})=>{
+ await page.goto('/v2/');
+ await expect(page.locator('path.archive-track')).toHaveCount(1);
+ await page.getByLabel('Search storms').fill('Katrina');
+ await page.getByRole('checkbox',{name:/KATRINA.*2005/i}).first().check();
+ await expect(page.locator('path.archive-track')).toHaveCount(2);
+ const colors=await page.locator('path.archive-track').evaluateAll(es=>es.map(e=>e.getAttribute('stroke')));
+ expect(new Set(colors).size).toBe(2);
+ await expect(page.locator('#selected-storms')).toContainText('AL092022');
+ await page.getByRole('button',{name:/Remove Ian.*AL092022/i}).click();
+ await expect(page.locator('path.archive-track')).toHaveCount(1);
+ await expect(page.locator('#selected-storms')).not.toContainText('AL092022');
+ await page.getByRole('button',{name:'Hide track'}).click();
+ await page.getByRole('button',{name:'Show track'}).click();
+ await expect(page.locator('path.archive-track')).toHaveAttribute('stroke',colors[1]);
+ await expect(page).not.toHaveTitle(/Ian/i);
+});
+
+
+test('failed storm track can be retried independently', async ({page})=>{
+ let attempts=0;
+ await page.route('**/data/storms/tracks.bin',r=>++attempts===1?r.abort():r.continue());
+ await page.goto('/v2/');
+ await expect(page.locator('#point-time')).toHaveText('Track unavailable');
+ await page.getByRole('button',{name:/Retry data for Ian/i}).click();
+ await expect(page.locator('#point-count')).toContainText('1 /');
+ expect(attempts).toBe(2);
+});
+
+test('empty tracks are unavailable rather than indefinitely loading', async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL092022:[]}))}));
+ await page.goto('/v2/');
+ await expect(page.locator('#point-time')).toHaveText('Track unavailable');
+ await expect(page.getByRole('button',{name:/Retry data for Ian/i})).toBeVisible();
+});
+
+
+test('a missing advertised swath offers retry rather than a zero-loss scenario', async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ await page.route('**/storms/swaths/AL092022.bin',r=>r.fulfill({body:gzipSync('null')}));
+ await page.goto('/v2/');
+ await expect(page.locator('#active-storm')).toContainText('unavailable');
+ await expect(page.getByRole('button',{name:/Retry data for Ian/i})).toBeVisible();
+});
+
+
+test('archive browses all storms in descending year order without losing focus', async ({page})=>{
+ await page.goto('/v2/');
+ const expected=await page.evaluate(async()=> (await (await fetch('/v2/data/storms/catalog.json')).json()).storms.length);
+ await expect(page.locator('#storm-list input')).toHaveCount(80);
+ const more=page.getByRole('button',{name:/show more storms/i});
+ await more.focus(); await page.keyboard.press('Enter');
+ await expect(page.locator('#storm-list input')).toHaveCount(160);
+ await expect(more).toBeFocused();
+ while(await more.count()) await more.click();
+ await expect(page.locator('#storm-list input')).toHaveCount(expected);
+ const years=await page.locator('#storm-list label').allTextContents();
+ const numbers=years.map(s=>Number(s.match(/ · (\d{4}) · /)[1]));
+ expect(numbers.every((y,i)=>!i || numbers[i-1]>=y)).toBe(true);
+ await expect(page.getByRole('button',{name:'All storms shown'})).toBeFocused();
+});
+
+for (const [a,b] of [[179,-179],[-179,179]]) {
+ test(`antimeridian marker follows short path ${a} to ${b}`,async ({page})=>{
+  const {gzipSync}=await import('node:zlib');
+  await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms:[{id:'EP012024',name:'Cross',year:2024,basin:'EP',hasSwath:false}]}}));
+  await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({EP012024:[{time:'2024-09-01T03:30:00Z',lat:20,lon:a,wind:40},{time:'2024-09-01T06:30:00Z',lat:21,lon:b,wind:50}]}))}));
+  await page.goto('/v2/');
+  const marker=page.locator('.storm-marker'); await expect(marker).toBeAttached();
+  const x=()=>marker.evaluate(el=>new DOMMatrixReadOnly(getComputedStyle(el).transform).m41);
+  const start=await x(); await page.getByRole('slider',{name:'Track point'}).fill('0.5');
+  const middle=await x(); await expect(page.locator('#point-time')).toContainText('05:00');
+  await page.getByRole('slider',{name:'Track point'}).fill('1'); const end=await x();
+  expect(Math.abs(end-start)).toBeLessThan(100);
+  expect(Math.abs(middle-(start+end)/2)).toBeLessThan(2);
+ });
+}
+
+
+test('reselecting a removed storm keeps selected track colors unique',async ({page})=>{
+ await page.goto('/v2/'); await expect(page.locator('path.archive-track')).toHaveCount(1);
+ await page.getByLabel('Search storms').fill('Katrina');
+ await page.getByRole('checkbox',{name:/KATRINA.*2005/i}).first().check();
+ await expect(page.locator('path.archive-track')).toHaveCount(2);
+ await page.getByRole('button',{name:/Remove Ian.*AL092022/i}).click();
+ await page.getByLabel('Search storms').fill('Andrew');
+ await page.getByRole('checkbox',{name:/ANDREW.*1992/i}).first().check();
+ await page.getByLabel('Search storms').fill('Ian');
+ await page.getByRole('checkbox',{name:/Ian.*2022/i}).first().check();
+ await expect(page.locator('path.archive-track')).toHaveCount(3);
+ const colors=await page.locator('path.archive-track').evaluateAll(es=>es.map(e=>e.getAttribute('stroke')));
+ expect(new Set(colors).size).toBe(3);
+ const chipColors=await page.locator('.storm-chip').evaluateAll(es=>es.map(e=>e.style.getPropertyValue('--track-color')));
+ expect(new Set(chipColors)).toEqual(new Set(colors));
+});
+
+
+test('real Pacific antimeridian track and playback use the same short world path',async ({page})=>{
+ await page.route('**/src/main.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text())+'\nwindow.__testMap=map;'});});
+ await page.goto('/v2/');
+ await page.getByLabel('Search storms').fill('EP052023');
+ await page.getByRole('checkbox',{name:/EP052023/}).check();
+ await expect(page.locator('#active-storm')).toContainText('2023');
+ const result=await page.evaluate(async()=>{
+  const response=await fetch('/v2/data/storms/tracks.bin');
+  const tracks=await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
+  const chronological=Object.values(tracks).every(track=>track.every((p,i)=>!i || Date.parse(track[i-1].time)<Date.parse(p.time)));
+  const raw=tracks.EP052023; const crossing=raw.findIndex((p,i)=>i && Math.abs(p.lon-raw[i-1].lon)>180);
+  let layer;window.__testMap.eachLayer(l=>{if(l.options?.className==='archive-track' && l.getLatLngs().length===raw.length) layer=l});
+  return {chronological, crossing, raw, path:layer?.getLatLngs().map(p=>p.lng)};
+ });
+ expect(result.chronological).toBe(true); expect(result.crossing).toBeGreaterThan(0); expect(result.path).toHaveLength(result.raw.length);
+ expect(result.path.every((x,i)=>!i || Math.abs(x-result.path[i-1])<=180)).toBe(true);
+ const slider=page.getByRole('slider',{name:'Track point'});
+ await slider.fill(String(result.crossing-0.5));
+ const markerLon=()=>page.evaluate(()=>{let lon;window.__testMap.eachLayer(l=>{if(l.options?.icon?.options?.className==='storm-marker')lon=l.getLatLng().lng});return lon});
+ expect(await markerLon()).toBeCloseTo((result.path[result.crossing-1]+result.path[result.crossing])/2,4);
+ await page.getByRole('button',{name:'Play track'}).click();
+ await expect.poll(async()=>Number(await slider.inputValue())).toBeGreaterThan(result.crossing-0.5);
+ expect(Math.abs((await markerLon())-result.path[result.crossing])).toBeLessThan(5);
+ await page.getByRole('button',{name:'Pause track'}).click();
+});
+
+
+test('eight selected tracks remain distinct after palette overflow and removal',async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ const storms=Array.from({length:9},(_,i)=>({id:`AL${String(i+1).padStart(2,'0')}2024`,name:`Storm ${i+1}`,year:2024,basin:'AL',hasSwath:false}));
+ const track=[{time:'2024-09-01T00:00:00Z',lat:25,lon:-81,wind:40},{time:'2024-09-01T06:00:00Z',lat:26,lon:-80,wind:50}];
+ await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms}}));
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify(Object.fromEntries(storms.map(s=>[s.id,track]))))}));
+ await page.goto('/v2/');
+ for(let i=2;i<=9;i++) await page.getByRole('checkbox',{name:new RegExp(`Storm ${i} ·`)}).check();
+ await expect(page.locator('path.archive-track')).toHaveCount(9);
+ await page.getByRole('button',{name:/Remove Storm 1 /}).click();
+ await expect(page.locator('path.archive-track')).toHaveCount(8);
+ const colors=await page.locator('path.archive-track').evaluateAll(es=>es.map(e=>e.getAttribute('stroke')));
+ expect(new Set(colors).size).toBe(8);
+ const chipColors=await page.locator('.storm-chip').evaluateAll(es=>es.map(e=>e.style.getPropertyValue('--track-color')));
+ expect(new Set(chipColors)).toEqual(new Set(colors));
 });
