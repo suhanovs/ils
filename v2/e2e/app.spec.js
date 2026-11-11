@@ -578,7 +578,8 @@ test('overlapping events report their strongest cumulative thresholds on hover a
  const tip=page.locator('.swath-info');
  await expect(tip).toContainText('AL092022: ≥64 kt');
  await expect(tip).toContainText('AL122005: ≥50 kt');
- await expect(tip).toContainText('not an exact wind speed');
+ await expect(tip).not.toContainText('not an exact wind speed');
+ await expect(tip).toContainText('threshold');
  expect((await tip.boundingBox()).width).toBeGreaterThan(180);
  await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
  await expect(tip).toContainText('AL122005');
