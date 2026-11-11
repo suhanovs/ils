@@ -1,4 +1,14 @@
 import { test, expect } from '@playwright/test';
+test('hazard controls are concise without repeating the active event', async ({page}) => {
+ await page.goto('/v2/');
+ await expect(page.getByRole('heading',{name:'Historical events'})).toBeVisible();
+ await expect(page.getByLabel('Find an event')).toBeVisible();
+ await expect(page.locator('#selected-storms')).toContainText('IAN (2022)');
+ await expect(page.locator('#active-storm')).toBeEmpty();
+ await expect(page.getByText('Lifetime wind footprint')).toBeVisible();
+ const text=await page.locator('.panel').innerText();
+ expect((text.match(/\bstorms?\b/gi)||[]).length).toBeLessThanOrEqual(1);
+});
 test('market and XOL work without housing and preserve footprint when toggled', async ({page}) => {
  await page.goto('/v2/');
  const housing=page.getByRole('checkbox',{name:'Housing tracts'});
@@ -28,8 +38,8 @@ test('failed automatic tract load can be retried without enabling housing', asyn
 });
 test('explores the actual Ian track and static cumulative swaths', async ({page}) => {
   await page.goto('/v2/');
-  await expect(page.getByRole('heading', {name:'Storm archive'})).toBeVisible();
-  await expect(page.getByText('Cumulative wind swath')).toBeVisible();
+  await expect(page.getByRole('heading', {name:'Historical events'})).toBeVisible();
+  await expect(page.getByText('Lifetime wind footprint')).toBeVisible();
   await expect(page.locator('.archive-track').first()).toBeVisible();
   const before = await page.locator('#point-time').textContent();
   await page.getByRole('slider', {name:'Track point'}).fill('10');
@@ -81,7 +91,7 @@ for (const viewport of [{width:1280,height:800},{width:375,height:812}]) {
 test('explains the map in plain language without legalistic warnings', async ({page}) => {
   await page.goto('/v2/');
   await expect(page.getByRole('heading',{name:'Where homes are'})).toBeVisible();
-  await expect(page.getByText(/Static estimated wind extent/)).toBeVisible();
+  await expect(page.getByText(/Cumulative extent, not current winds/)).toBeVisible();
   await expect(page.getByText('Read this map carefully')).toHaveCount(0);
   await expect(page.getByText('Sources & assumptions')).toHaveCount(0);
 });
@@ -119,7 +129,7 @@ test('shows all cumulative wind extents together', async ({page}) => {
  await page.goto('/v2/');
  await expect(page.locator('[data-swath]')).toHaveCount(3);
  for (const wind of ['34','50','64']) await expect(page.locator(`[data-swath="${wind}"]`)).toBeVisible();
- await expect(page.getByText(/static.*full storm/i)).toBeVisible();
+ await expect(page.getByText(/Cumulative extent, not current winds/i)).toBeVisible();
  await expect(page.locator('[data-wind]')).toHaveCount(0);
 });
 test('scrubbing interpolates the track without changing static swaths', async ({page}) => {
@@ -347,20 +357,20 @@ test('archive selects multiple storms and unavailable swaths never produce zero 
  await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(Buffer.from(JSON.stringify(Object.fromEntries(storms.map(s=>[s.id,[{time:'2022-09-23T00:00:00Z',lat:25,lon:-81,wind:40},{time:'2022-09-23T06:00:00Z',lat:26,lon:-80,wind:50}]])))))}));
  await page.route('**/data/storms/swaths/AL092022.bin',async r=>r.fulfill({body:gzipSync(await (await import('node:fs/promises')).readFile('public/data/ian-windswath.geojson'))}));
  await page.goto('/v2/');
- await expect(page.getByLabel('Search storms')).toBeVisible();
- await page.getByLabel('Search storms').fill('Alpha');
+ await expect(page.getByLabel('Find an event')).toBeVisible();
+ await page.getByLabel('Find an event').fill('Alpha');
  await page.getByRole('checkbox',{name:/Alpha.*2024/}).check();
- await expect(page.locator('#active-storm')).toContainText('Alpha');
+ await expect(page.locator('.storm-chip-select[aria-pressed=true]')).toContainText('Alpha');
  await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
  await expect(page.locator('#xol-results')).toContainText('unavailable');
  await expect(page.locator('#market-legend')).toContainText('unavailable');
  await expect(page.locator('#xol-results')).not.toContainText('Premium');
- await page.getByLabel('Search storms').fill('Ian');
+ await page.getByLabel('Find an event').fill('Ian');
  await page.getByRole('checkbox',{name:/Ian.*2022/}).check();
  await page.locator('#selected-storms').getByRole('button',{name:/Ian/}).first().click();
  await expect(page.locator('#selected-storms')).toContainText('Alpha');
  await expect(page.locator('#selected-storms')).toContainText('Ian');
- await expect(page.locator('#active-storm')).toContainText('Ian');
+ await expect(page.locator('.storm-chip-select[aria-pressed=true]')).toContainText('Ian');
  await expect(page.locator('#xol-results')).toContainText('Investor loss',{timeout:30000});
 });
 
@@ -382,14 +392,14 @@ test('deselected storm does not reappear when its delayed data arrives', async (
  let release;const gate=new Promise(r=>release=r);
  await page.route('**/data/storms/swaths/AL092022.bin',async r=>{await gate;await r.fulfill({body:gzipSync(await (await import('node:fs/promises')).readFile('public/data/ian-windswath.geojson'))})});
  await page.goto('/v2/');
- await page.getByLabel('Search storms').fill('Ian');
+ await page.getByLabel('Find an event').fill('Ian');
  await page.getByRole('checkbox',{name:/Ian/}).uncheck();
- await page.getByLabel('Search storms').fill('Alpha');
+ await page.getByLabel('Find an event').fill('Alpha');
  await page.getByRole('checkbox',{name:/Alpha/}).check();
  release();
  await expect(page.locator('#point-count')).toHaveText('1 / 2');
  await page.waitForTimeout(300);
- await expect(page.locator('#active-storm')).toContainText('Alpha');
+ await expect(page.locator('.storm-chip-select[aria-pressed=true]')).toContainText('Alpha');
  await expect(page.locator('path.swath-layer')).toHaveCount(0);
  await expect(page.locator('path.archive-track')).toHaveCount(1);
 });
@@ -398,7 +408,7 @@ test('deselected storm does not reappear when its delayed data arrives', async (
 test('selected tracks have stable distinct colors and removable accessible chips', async ({page})=>{
  await page.goto('/v2/');
  await expect(page.locator('path.archive-track')).toHaveCount(1);
- await page.getByLabel('Search storms').fill('Katrina');
+ await page.getByLabel('Find an event').fill('Katrina');
  await page.getByRole('checkbox',{name:/KATRINA.*2005/i}).first().check();
  await expect(page.locator('path.archive-track')).toHaveCount(2);
  const colors=await page.locator('path.archive-track').evaluateAll(es=>es.map(e=>e.getAttribute('stroke')));
@@ -446,7 +456,7 @@ test('archive browses all storms in descending year order without losing focus',
  await page.goto('/v2/');
  const expected=await page.evaluate(async()=> (await (await fetch('/v2/data/storms/catalog.json')).json()).storms.length);
  await expect(page.locator('#storm-list input')).toHaveCount(80);
- const more=page.getByRole('button',{name:/show more storms/i});
+ const more=page.getByRole('button',{name:/show more/i});
  await more.focus(); await page.keyboard.press('Enter');
  await expect(page.locator('#storm-list input')).toHaveCount(160);
  await expect(more).toBeFocused();
@@ -455,7 +465,7 @@ test('archive browses all storms in descending year order without losing focus',
  const years=await page.locator('#storm-list label').allTextContents();
  const numbers=years.map(s=>Number(s.match(/ · (\d{4}) · /)[1]));
  expect(numbers.every((y,i)=>!i || numbers[i-1]>=y)).toBe(true);
- await expect(page.getByRole('button',{name:'All storms shown'})).toBeFocused();
+ await expect(page.getByRole('button',{name:'All shown'})).toBeFocused();
 });
 
 for (const [a,b] of [[179,-179],[-179,179]]) {
@@ -477,13 +487,13 @@ for (const [a,b] of [[179,-179],[-179,179]]) {
 
 test('reselecting a removed storm keeps selected track colors unique',async ({page})=>{
  await page.goto('/v2/'); await expect(page.locator('path.archive-track')).toHaveCount(1);
- await page.getByLabel('Search storms').fill('Katrina');
+ await page.getByLabel('Find an event').fill('Katrina');
  await page.getByRole('checkbox',{name:/KATRINA.*2005/i}).first().check();
  await expect(page.locator('path.archive-track')).toHaveCount(2);
  await page.getByRole('button',{name:/Remove Ian.*AL092022/i}).click();
- await page.getByLabel('Search storms').fill('Harvey');
+ await page.getByLabel('Find an event').fill('Harvey');
  await page.getByRole('checkbox',{name:/HARVEY.*2017/i}).first().check();
- await page.getByLabel('Search storms').fill('Ian');
+ await page.getByLabel('Find an event').fill('Ian');
  await page.getByRole('checkbox',{name:/Ian.*2022/i}).first().check();
  await expect(page.locator('path.archive-track')).toHaveCount(3);
  const colors=await page.locator('path.archive-track').evaluateAll(es=>es.map(e=>e.getAttribute('stroke')));
@@ -500,9 +510,9 @@ test('mock antimeridian track and playback use the same short world path',async 
  await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL012024:track}))}));
  await page.route('**/src/main.js',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text())+'\nwindow.__testMap=map;'});});
  await page.goto('/v2/');
- await page.getByLabel('Search storms').fill('AL012024');
+ await page.getByLabel('Find an event').fill('AL012024');
  await expect(page.getByRole('checkbox',{name:/AL012024/})).toBeChecked();
- await expect(page.locator('#active-storm')).toContainText('2024');
+ await expect(page.locator('.storm-chip-select[aria-pressed=true]')).toContainText('2024');
  const result=await page.evaluate(async()=>{
   const response=await fetch('/v2/data/storms/tracks.bin');
   const tracks=await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
@@ -543,9 +553,8 @@ test('eight selected tracks remain distinct after palette overflow and removal',
 
 test('GIS-only event identifies its preliminary track', async ({page})=>{
  await page.goto('/v2/');
- await page.getByLabel('Search storms').fill('AL012026');
+ await page.getByLabel('Find an event').fill('AL012026');
  await page.getByRole('checkbox',{name:/AL012026/}).check();
- await expect(page.locator('#active-storm')).toContainText('AL012026');
- await expect(page.locator('#active-storm')).toContainText('preliminary');
- await expect(page.locator('#active-storm')).toContainText('LO, TS');
+ await expect(page.locator('.storm-chip-select[aria-pressed=true]')).toContainText('AL012026');
+ await expect(page.locator('#active-storm')).toContainText('Preliminary track');
 });
