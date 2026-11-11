@@ -36,6 +36,7 @@ function assignTrackColors(){
   if(!color || used.has(color)) color=trackPalette.find(c=>!used.has(c)) || color || trackPalette[used.size%trackPalette.length];
   stormColors.set(id,color);used.add(color);
   stormCache.get(id)?.track?.setStyle({color});
+  stormCache.get(id)?.observations?.eachLayer(point=>point.setStyle({fillColor:color}));
  }
 }
 const stormName=s=>`${s.name} (${s.year})`;
@@ -62,13 +63,18 @@ function renderStormLayers(s,entry){
  if(!entry.swathLayer && entry.swath) entry.swathLayer=L.layerGroup([34,50,64].map(wind=>L.geoJSON(entry.swath,{filter:f=>f.properties.RADII===wind,style:{className:`swath-layer swath-${wind}`,color:colors[wind],weight:1,opacity:.9,fillColor:colors[wind],fillOpacity:.38},interactive:false})));
  if(!entry.observations && entry.unwrapped?.length) entry.observations=L.layerGroup(entry.unwrapped.map(p=>{
   const detail=document.createElement('div');detail.textContent=`${stormName(s)} · ${p.time.replace('T',' ').replace(/Z$/, ' UTC')} · ${observationLabel(p.wind)}`;
-  return L.circleMarker([p.lat,p.lon],{pane:'trackPane',className:'track-observation',radius:3,color:trackColor(s.id),weight:1,fillOpacity:.8}).bindTooltip(detail,{direction:'top',className:'track-info'}).bindPopup(detail.cloneNode(true)).on('popupopen',e=>e.target.closeTooltip());
+  return L.circleMarker([p.lat,p.lon],{pane:'trackPane',className:'track-observation',radius:4,color:'#ffffff',weight:1.5,fillColor:trackColor(s.id),fillOpacity:1}).bindTooltip(detail,{direction:'top',className:'track-info'}).bindPopup(detail.cloneNode(true))
+   .on('mouseover',e=>{if(activeObservation && activeObservation!==e.target)activeObservation.closeTooltip();activeObservation=e.target;map.closeTooltip(swathInfo)})
+   .on('mouseout',e=>{e.target.closeTooltip();if(activeObservation===e.target)activeObservation=null})
+   .on('popupopen',e=>{e.target.closeTooltip();map.closeTooltip(swathInfo)});
  }));
  if(entry.swathLayer)entry.swathLayer.addTo(map); if(entry.track)entry.track.addTo(map);if(entry.observations)entry.observations.addTo(map);
 }
-function removeStormLayers(entry){entry?.track?.remove();entry?.observations?.remove();entry?.swathLayer?.remove()}
+function removeStormLayers(entry){if(activeObservation && entry?.observations?.hasLayer(activeObservation)){activeObservation.closeTooltip();activeObservation=null}map.closeTooltip(swathInfo);entry?.track?.remove();entry?.observations?.remove();entry?.swathLayer?.remove()}
 const swathInfo=L.tooltip({direction:'top',offset:[0,-8],className:'swath-info'});
+let activeObservation=null;
 function showSwathInfo(e){
+ if(e.originalEvent?.target?.closest?.('.track-observation') || activeObservation){map.closeTooltip(swathInfo);return}
  const lon=((e.latlng.lng+180)%360+360)%360-180, lines=[];
  for(const id of selectedStorms){
   const entry=stormCache.get(id), storm=storms.find(s=>s.id===id);

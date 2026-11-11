@@ -597,8 +597,12 @@ test('real pointer sees track observations and swaths over selected housing and 
  const box=await page.locator('#map').boundingBox();
  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
  await expect(page.locator('.leaflet-tooltip').filter({hasText:'Category 3'})).toContainText('96 kt / 110 mph');
+ await expect(page.locator('.swath-info')).toHaveCount(0);
+ await expect(page.locator('.track-info')).toHaveCount(1);
+ await expect(page.locator('.track-observation').first()).toHaveAttribute('stroke','#ffffff');
  await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
  await expect(page.locator('.leaflet-popup')).toContainText('Category 3');
+ await expect(page.locator('.swath-info')).toHaveCount(0);
  await page.mouse.move(box.x+box.width/2+45,box.y+box.height/2);
  await expect(page.locator('.swath-info')).toContainText('≥64 kt');
  await expect(page.locator('#xol-results')).toContainText('Investor loss');
@@ -618,5 +622,7 @@ test('touchscreen taps reveal swath thresholds and track observations',async({br
  await page.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);
  await expect(page.locator('.leaflet-popup').filter({hasText:'Category 2'})).toBeVisible();
  await expect(page.locator('.track-info')).toHaveCount(0);
+ await page.touchscreen.tap(box.x+box.width/2-40,box.y+box.height/2);
+ await expect(page.locator('.swath-info')).toContainText('≥50 kt');
  await context.close();
 });
