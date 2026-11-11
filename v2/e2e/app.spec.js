@@ -1,10 +1,25 @@
 import { test, expect } from '@playwright/test';
+import { selectIan, useIanCatalog } from './helpers.js';
+test('latest hurricane starts selected with compact archive and intensity markers', async ({page})=>{
+ await page.goto('/v2/');
+ await expect(page.locator('.storm-chip-select[aria-pressed=true]')).toContainText('AL092026');
+ await expect(page.locator('label[for=storm-search]')).toHaveCount(0);
+ await expect(page.getByText('Hover or tap for wind details.')).toHaveCount(0);
+ const sizes=await page.evaluate(()=>[getComputedStyle(document.querySelector('#storm-search')).fontSize,getComputedStyle(document.querySelector('#storm-list label')).fontSize]);
+ expect(sizes[0]).toBe(sizes[1]);
+ const button=await page.locator('#archive-more').boundingBox(),status=await page.locator('#storm-list-status').boundingBox();
+ expect(Math.abs(button.y+button.height/2-status.y-status.height/2)).toBeLessThan(2);
+ await expect(page.locator('.track-observation').first()).toHaveAttribute('stroke','#000000');
+ const fills=await page.locator('.track-observation').evaluateAll(es=>[...new Set(es.map(e=>e.getAttribute('fill')))]);
+ expect(fills.length).toBeGreaterThan(1);
+});
 test('hazard controls are concise without repeating the active event', async ({page}) => {
  await page.goto('/v2/');
  await expect(page.getByRole('heading',{name:'Historical events'})).toBeVisible();
  await expect(page.getByLabel('Find an event')).toBeVisible();
- await expect(page.locator('#selected-storms')).toContainText('IAN (2022)');
- await expect(page.locator('#active-storm')).toBeEmpty();
+ await expect(page.locator('#selected-storms')).toContainText('AL092026');
+ await expect(page.locator('#active-storm')).toHaveText('Preliminary track');
+ await expect(page.locator('#active-storm')).not.toContainText('AL092026');
  await expect(page.getByText('Lifetime wind footprint')).toHaveCount(0);
  const text=await page.locator('.panel').innerText();
  expect((text.match(/\bstorms?\b/gi)||[]).length).toBeLessThanOrEqual(1);
@@ -38,6 +53,7 @@ test('failed automatic tract load can be retried without enabling housing', asyn
 });
 test('explores the actual Ian track and static cumulative swaths', async ({page}) => {
   await page.goto('/v2/');
+ await selectIan(page);
   await expect(page.getByRole('heading', {name:'Historical events'})).toBeVisible();
   await expect(page.getByText('Lifetime wind footprint')).toHaveCount(0);
   await expect(page.locator('.archive-track').first()).toBeVisible();
@@ -51,7 +67,7 @@ test('mobile layout exposes map and working controls without horizontal overflow
   await page.setViewportSize({width:375,height:812});
   await page.goto('/v2/');
   await expect(page.locator('#map')).toBeVisible();
-  await expect(page.getByText(/Hover or tap/)).toBeVisible();
+  await expect(page.getByText(/Hover or tap/)).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   await page.getByRole('button', {name:'Play track'}).click();
   await expect(page.getByRole('button', {name:'Pause track'})).toBeVisible();
@@ -90,7 +106,7 @@ for (const viewport of [{width:1280,height:800},{width:375,height:812}]) {
 test('explains the map in plain language without legalistic warnings', async ({page}) => {
   await page.goto('/v2/');
   await expect(page.getByRole('heading',{name:'Where homes are'})).toBeVisible();
-  await expect(page.getByText(/Hover or tap/)).toBeVisible();
+  await expect(page.getByText(/Hover or tap/)).toHaveCount(0);
   await expect(page.getByText('Read this map carefully')).toHaveCount(0);
   await expect(page.getByText('Sources & assumptions')).toHaveCount(0);
 });
@@ -126,12 +142,14 @@ for (const width of [1280,375]) {
 
 test('shows all cumulative wind extents together', async ({page}) => {
  await page.goto('/v2/');
+ await selectIan(page);
  for (const wind of ['34','50','64']) await expect(page.locator(`path.swath-${wind}`).first()).toBeAttached();
- await expect(page.getByText(/Hover or tap/)).toBeVisible();
+ await expect(page.getByText(/Hover or tap/)).toHaveCount(0);
  await expect(page.locator('[data-wind]')).toHaveCount(0);
 });
 test('scrubbing interpolates the track without changing static swaths', async ({page}) => {
  await page.goto('/v2/');
+ await selectIan(page);
  const slider=page.getByRole('slider',{name:'Track point'});
  await expect(slider).toHaveAttribute('step','0.001');
  await expect(page.locator('path.swath-layer')).toHaveCount(6);
@@ -159,6 +177,7 @@ test('mobile timeline sits before the long explorer panel', async ({page})=>{
 });
 test('playback moves continuously and interpolates real observation time and intensity', async ({page})=>{
  await page.goto('/v2/');
+ await selectIan(page);
  const slider=page.getByRole('slider',{name:'Track point'});
  await slider.fill('13.5');
  await expect(page.locator('#point-time')).toContainText('03:00');
@@ -173,6 +192,7 @@ test('playback moves continuously and interpolates real observation time and int
 
 test('Ian XOL scenario selects and clears cedents', async ({page})=>{
  await page.goto('/v2/');
+ await selectIan(page);
  await page.getByRole('checkbox',{name:'Housing tracts'}).check();
  await expect(page.locator('#xol-results')).toContainText('Select cedents');
  await page.getByRole('checkbox',{name:/Cedent 01/}).check();
@@ -193,6 +213,7 @@ test('storm marker is a rotating hurricane vector and timeline is compact', asyn
 
 test('XOL results reconcile with the shared Ian engine and stay static while scrubbing', async ({page})=>{
  await page.goto('/v2/');
+ await selectIan(page);
  await page.getByRole('checkbox',{name:'Housing tracts'}).check();
  await page.getByRole('checkbox',{name:/Cedent 01/}).check();
  await page.getByRole('checkbox',{name:/Cedent 02/}).check();
@@ -251,6 +272,7 @@ test('regenerating a selected market uses the new seed for XOL', async ({page})=
 test('failed swath is not treated as a no-storm scenario', async ({page})=>{
  await page.route('**/storms/swaths/AL092022.bin', route=>route.abort());
  await page.goto('/v2/');
+ await selectIan(page);
  await page.getByRole('checkbox',{name:'Housing tracts'}).check();
  await page.getByRole('checkbox',{name:/Cedent 01/}).check();
  await expect(page.locator('#xol-results')).toContainText('Storm data unavailable');
@@ -273,6 +295,7 @@ test('footprint repaints real pixels after clearing and reselecting', async ({pa
 
 test('event impact displays the shared modeled loss and remains static on scrub', async ({page})=>{
  await page.goto('/v2/');
+ await selectIan(page);
  await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
  await page.getByRole('checkbox',{name:/Cedent 02/}).check();
  await page.getByLabel('View',{exact:true}).selectOption('impact');
@@ -311,6 +334,7 @@ test('impact reports classification failure instead of zero or perpetual loading
  const {gzipSync}=await import('node:zlib');
  await page.route('**/storms/swaths/AL092022.bin',route=>route.fulfill({body:gzipSync(JSON.stringify({type:'FeatureCollection',features:[{type:'Feature',properties:{RADII:34},geometry:{type:'Point',coordinates:[-81,26]}}]}))}));
  await page.goto('/v2/');
+ await selectIan(page);
  await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
  await page.getByLabel('View',{exact:true}).selectOption('impact');
  await expect(page.locator('#market-legend')).toContainText('unavailable',{timeout:30000});
@@ -319,6 +343,7 @@ test('impact reports classification failure instead of zero or perpetual loading
 
 test('impact refreshes on seed and selection even when XOL terms are invalid', async ({page})=>{
  await page.goto('/v2/');
+ await selectIan(page);
  await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
  await page.getByLabel('View',{exact:true}).selectOption('impact');
  await expect(page.locator('#market-legend')).toContainText('Cedent covered loss',{timeout:30000});
@@ -405,6 +430,7 @@ test('deselected storm does not reappear when its delayed data arrives', async (
 
 test('selected tracks have stable distinct colors and removable accessible chips', async ({page})=>{
  await page.goto('/v2/');
+ await selectIan(page);
  await expect(page.locator('path.archive-track')).toHaveCount(1);
  await page.getByLabel('Find an event').fill('Katrina');
  await page.getByRole('checkbox',{name:/KATRINA.*2005/i}).first().check();
@@ -423,6 +449,7 @@ test('selected tracks have stable distinct colors and removable accessible chips
 test('failed storm track can be retried independently', async ({page})=>{
  let attempts=0;
  await page.route('**/data/storms/tracks.bin',r=>++attempts===1?r.abort():r.continue());
+ await useIanCatalog(page);
  await page.goto('/v2/');
  await expect(page.locator('#point-time')).toHaveText('Track unavailable');
  await page.getByRole('button',{name:/Retry data for Ian/i}).click();
@@ -433,6 +460,7 @@ test('failed storm track can be retried independently', async ({page})=>{
 test('empty tracks are unavailable rather than indefinitely loading', async ({page})=>{
  const {gzipSync}=await import('node:zlib');
  await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL092022:[]}))}));
+ await useIanCatalog(page);
  await page.goto('/v2/');
  await expect(page.locator('#point-time')).toHaveText('Track unavailable');
  await expect(page.getByRole('button',{name:/Retry data for Ian/i})).toBeVisible();
@@ -442,6 +470,7 @@ test('empty tracks are unavailable rather than indefinitely loading', async ({pa
 test('a missing advertised swath offers retry rather than a zero-loss scenario', async ({page})=>{
  const {gzipSync}=await import('node:zlib');
  await page.route('**/storms/swaths/AL092022.bin',r=>r.fulfill({body:gzipSync('null')}));
+ await useIanCatalog(page);
  await page.goto('/v2/');
  await expect(page.locator('#active-storm')).toContainText('unavailable');
  await expect(page.getByRole('button',{name:/Retry data for Ian/i})).toBeVisible();
@@ -482,7 +511,8 @@ for (const [a,b] of [[179,-179],[-179,179]]) {
 
 
 test('reselecting a removed storm keeps selected track colors unique',async ({page})=>{
- await page.goto('/v2/'); await expect(page.locator('path.archive-track')).toHaveCount(1);
+ await page.goto('/v2/');
+ await selectIan(page); await expect(page.locator('path.archive-track')).toHaveCount(1);
  await page.getByLabel('Find an event').fill('Katrina');
  await page.getByRole('checkbox',{name:/KATRINA.*2005/i}).first().check();
  await expect(page.locator('path.archive-track')).toHaveCount(2);
@@ -559,7 +589,7 @@ test('map offers threshold and observed track details without old controls', asy
  await page.goto('/v2/');
  await expect(page.getByText('Lifetime wind footprint')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Hide track'})).toHaveCount(0);
- await expect(page.getByText(/Hover or tap/)).toBeVisible();
+ await expect(page.getByText(/Hover or tap/)).toHaveCount(0);
  await expect(page.locator('.track-observation').first()).toBeAttached();
  await page.locator('.track-observation').first().dispatchEvent('mouseover');
  await expect(page.locator('.leaflet-tooltip')).toContainText('kt');
@@ -570,6 +600,7 @@ test('overlapping events report their strongest cumulative thresholds on hover a
  const polygon=(wind)=>({type:'Feature',properties:{RADII:wind},geometry:{type:'Polygon',coordinates:[[[-84,23],[-78,23],[-78,28],[-84,28],[-84,23]]]}});
  for(const [id,winds] of [['AL092022',[34,64]],['AL122005',[34,50]]]) await page.route(`**/storms/swaths/${id}.bin`,r=>r.fulfill({body:gzipSync(JSON.stringify({type:'FeatureCollection',features:winds.map(polygon)}))}));
  await page.goto('/v2/');
+ await selectIan(page);
  await page.getByLabel('Find an event').fill('Katrina');
  await page.getByRole('checkbox',{name:/KATRINA.*2005/i}).first().check();
  await expect(page.locator('path.swath-50')).toHaveCount(1);
@@ -590,6 +621,7 @@ test('real pointer sees track observations and swaths over selected housing and 
  const track=[{time:'2022-09-01T00:00:00Z',lat:25.5,lon:-81,wind:96},{time:'2022-09-01T06:00:00Z',lat:26,lon:-80,wind:null}];
  await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL092022:track}))}));
  await page.route('**/storms/swaths/AL092022.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({type:'FeatureCollection',features:[{type:'Feature',properties:{RADII:64},geometry:{type:'Polygon',coordinates:[[[-84,23],[-78,23],[-78,28],[-84,28],[-84,23]]]}}]}))}));
+ await useIanCatalog(page);
  await page.goto('/v2/');
  await page.getByRole('checkbox',{name:'Housing tracts'}).check();
  await page.getByRole('checkbox',{name:/Cedent 01/}).check();
@@ -599,7 +631,7 @@ test('real pointer sees track observations and swaths over selected housing and 
  await expect(page.locator('.leaflet-tooltip').filter({hasText:'Category 3'})).toContainText('96 kt / 110 mph');
  await expect(page.locator('.swath-info')).toHaveCount(0);
  await expect(page.locator('.track-info')).toHaveCount(1);
- await expect(page.locator('.track-observation').first()).toHaveAttribute('stroke','#ffffff');
+ await expect(page.locator('.track-observation').first()).toHaveAttribute('stroke','#000000');
  await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
  await expect(page.locator('.leaflet-popup')).toContainText('Category 3');
  await expect(page.locator('.swath-info')).toHaveCount(0);
@@ -614,6 +646,7 @@ test('touchscreen taps reveal swath thresholds and track observations',async({br
  const page=await context.newPage();
  await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL092022:[{time:'2022-09-01T00:00:00Z',lat:25.5,lon:-81,wind:83},{time:'2022-09-01T06:00:00Z',lat:26,lon:-80,wind:null}]}))}));
  await page.route('**/storms/swaths/AL092022.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({type:'FeatureCollection',features:[{type:'Feature',properties:{RADII:50},geometry:{type:'Polygon',coordinates:[[[-84,23],[-78,23],[-78,28],[-84,28],[-84,23]]]}}]}))}));
+ await useIanCatalog(page);
  await page.goto('http://127.0.0.1:4174/v2/');
  await expect(page.locator('.track-observation')).toHaveCount(2);
  const box=await page.locator('#map').boundingBox();

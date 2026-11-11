@@ -42,5 +42,6 @@
 .storm-chip-error{font-size:10px;color:#ffd1bc;padding:0 4px}
 
 #archive-more{margin-top:6px}#archive-more[aria-disabled=true]{opacity:.7;cursor:default}
-.map-hint{font-size:11px;color:#bfd0cf;margin:6px 0}.leaflet-tooltip.swath-info,.leaflet-tooltip.track-info{white-space:normal;width:max-content;max-width:min(260px,70vw)}
+.leaflet-tooltip.swath-info,.leaflet-tooltip.track-info{white-space:normal;width:max-content;max-width:min(260px,70vw)}
 .track-observation{filter:drop-shadow(0 0 2px #102735)}
+#storm-search{font-size:11px;margin-top:10px}.archive-row{display:flex;align-items:center;gap:10px;margin-top:6px}#archive-more{margin-top:0}

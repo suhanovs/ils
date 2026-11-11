@@ -4,14 +4,14 @@ import './style.css';
 import {clampIndex} from './model.js';
 import {generateMarket, summarizeSelection} from './market.js';
 import {simulatePortfolio, layerOutcome, classifyPoint} from './loss.js';
-import {compareStorms, observationLabel} from './storm-display.js';
+import {compareStorms, observationLabel, defaultStorm, intensityColor} from './storm-display.js';
 
 const app = document.querySelector('#app');
 app.innerHTML = `
   <div id="map" aria-label="Interactive map of selected historical storm tracks and cumulative wind swaths"></div>
   <header class="topbar"><a class="brand" href="/" title="Return to aboutILS"><span class="brand-mark">✳</span><span>about<span>ILS</span><small>STORM ATLAS</small></span></a><span class="header-tag"><i></i> HISTORICAL EXPLORER</span><a class="back" href="/">← <span>Back to aboutILS</span></a></header>
   <main class="panel"><h1>Historical events</h1>
-  <details class="control-section" open><summary>Hazard</summary><label for="storm-search">Find an event</label><input id="storm-search" type="search" placeholder="Name, year or ID"><div id="storm-list" aria-label="Event archive" aria-live="polite">Loading archive…</div><p id="storm-list-status" role="status"></p><div id="selected-storms" aria-label="Selected events"></div><p id="active-storm" role="status"></p><p class="map-hint">Hover or tap for wind details.</p></details>
+  <details class="control-section" open><summary>Hazard</summary><input id="storm-search" type="search" aria-label="Find an event" placeholder="Name, year or ID"><div id="storm-list" aria-label="Event archive" aria-live="polite">Loading archive…</div><div class="archive-row"><span id="storm-list-status" role="status"></span></div><div id="selected-storms" aria-label="Selected events"></div><p id="active-storm" role="status"></p></details>
   <section class="exposure"><details class="control-section" open><summary>Exposure</summary><h2>Where homes are</h2><fieldset class="visual-options"><legend>Visualization options</legend><label><input id="tract-toggle" type="checkbox"> Housing tracts</label></fieldset><p id="tract-status" role="status"></p><button id="tract-retry" type="button" hidden>Retry loading data</button><details><summary>Find a tract</summary><label for="tract-search">Search Florida tract GEOID</label><input id="tract-search" type="search" inputmode="numeric" placeholder="Enter tract GEOID" disabled><div id="tract-results" aria-live="polite"></div><div id="tract-detail" aria-live="polite"></div></details></details><details class="control-section" open><summary>Cedents</summary><div class="market-heading"><h2>Fictional cedent market</h2><span class="help"><button type="button" aria-label="About modeled cedents" aria-describedby="market-help">?</button><span id="market-help" role="tooltip">Synthetic insurers share the Florida market.</span></span></div><div class="market-controls"><label for="market-seed">Seed</label><input id="market-seed" type="number" min="0" max="4294967295" step="1" value="42"><button id="market-generate" type="button" disabled>Generate</button><label for="market-view">View</label><select id="market-view"><option value="impact">Event impact</option><option value="concentration">Concentration</option><option value="overlap">Overlap</option></select></div><div id="market-legend" aria-live="polite"></div><p id="market-error" role="status"></p><p id="market-residual"></p><div id="cedent-list" aria-label="Select cedents"></div><p id="market-summary" aria-live="polite">Loading market…</p></details><details class="control-section" open><summary>Underwriting</summary><section class="xol"><h2>Junior XOL scenario</h2><p class="xol-caption">Active event</p><label for="xol-capital">Upfront capital ($)</label><input id="xol-capital" type="number" min="0" step="1000" value="1000000"><div class="xol-terms policy-terms"><label>Policy deductible (% of replacement value)<input id="xol-policy-deductible" type="number" min="0" max="100" step="1" value="2"></label><label>Policy limit (% of replacement value)<input id="xol-policy-limit" type="number" min="0" max="100" step="1" value="100"></label></div><div class="xol-terms"><label>Attachment (% of exposure)<input id="xol-attachment" type="number" min="0" max="100" step="1" value="2"></label><label>Limit (% of exposure)<input id="xol-limit" type="number" min="0" max="100" step="1" value="8"></label><label>Rate on line (%)<input id="xol-rate" type="number" min="0" step="1" value="10"></label></div><p>Capital is split equally; unused capital stays unallocated.</p><div id="xol-status" role="status"></div><div id="xol-results" aria-live="polite">Select cedents to model the event.</div><details><summary>How this works</summary><p>Wind damage uses present-day housing at $300,000 per unit. Policy terms apply before the XOL layer.</p><p>Investor loss is the funded share of ceded loss. Premium is principal × rate on line.</p></details></section></details></section></main>
   <div class="map-label"><span>HISTORICAL VIEW</span><b id="map-storm">No storm selected</b><small id="map-storm-detail">Select storms in Hazard</small></div>
   <section class="timeline" aria-label="Storm timeline"><div class="timeline-head"><div><span class="overline">STORM TRACK</span><strong id="point-time">Loading track…</strong></div><div class="timeline-actions"><button id="play" aria-label="Play track">▶</button><span id="point-count"></span></div></div><input id="timeline" aria-label="Track point" type="range" min="0" value="0" step="0.001"><div class="timeline-foot"><span id="timeline-start"></span><span>ACTIVE STORM TRACK POINT · UTC</span><span id="timeline-end"></span></div></section>
@@ -36,7 +36,6 @@ function assignTrackColors(){
   if(!color || used.has(color)) color=trackPalette.find(c=>!used.has(c)) || color || trackPalette[used.size%trackPalette.length];
   stormColors.set(id,color);used.add(color);
   stormCache.get(id)?.track?.setStyle({color});
-  stormCache.get(id)?.observations?.eachLayer(point=>point.setStyle({fillColor:color}));
  }
 }
 const stormName=s=>`${s.name} (${s.year})`;
@@ -63,7 +62,7 @@ function renderStormLayers(s,entry){
  if(!entry.swathLayer && entry.swath) entry.swathLayer=L.layerGroup([34,50,64].map(wind=>L.geoJSON(entry.swath,{filter:f=>f.properties.RADII===wind,style:{className:`swath-layer swath-${wind}`,color:colors[wind],weight:1,opacity:.9,fillColor:colors[wind],fillOpacity:.38},interactive:false})));
  if(!entry.observations && entry.unwrapped?.length) entry.observations=L.layerGroup(entry.unwrapped.map(p=>{
   const detail=document.createElement('div');detail.textContent=`${stormName(s)} · ${p.time.replace('T',' ').replace(/Z$/, ' UTC')} · ${observationLabel(p.wind)}`;
-  return L.circleMarker([p.lat,p.lon],{pane:'trackPane',className:'track-observation',radius:4,color:'#ffffff',weight:1.5,fillColor:trackColor(s.id),fillOpacity:1}).bindTooltip(detail,{direction:'top',className:'track-info'}).bindPopup(detail.cloneNode(true))
+  return L.circleMarker([p.lat,p.lon],{pane:'trackPane',className:'track-observation',radius:4,color:'#000000',weight:1.5,fillColor:intensityColor(p.wind),fillOpacity:1}).bindTooltip(detail,{direction:'top',className:'track-info'}).bindPopup(detail.cloneNode(true))
    .on('mouseover',e=>{if(activeObservation && activeObservation!==e.target)activeObservation.closeTooltip();activeObservation=e.target;map.closeTooltip(swathInfo)})
    .on('mouseout',e=>{e.target.closeTooltip();if(activeObservation===e.target)activeObservation=null})
    .on('popupopen',e=>{e.target.closeTooltip();map.closeTooltip(swathInfo)});
@@ -89,7 +88,7 @@ map.on('mousemove',showSwathInfo);map.on('click',showSwathInfo);map.on('mouseout
 let archiveMatches=[], archiveShown=0;
 const archiveMore=document.createElement('button');
 archiveMore.type='button';archiveMore.id='archive-more';archiveMore.textContent='Show more';archiveMore.setAttribute('aria-controls','storm-list');
-$('#storm-list').after(archiveMore);
+$('.archive-row').prepend(archiveMore);
 function appendArchive(){
  const list=$('#storm-list'), start=archiveShown, fragment=document.createDocumentFragment();
  for(const s of archiveMatches.slice(start,start+80)) {const label=document.createElement('label'), input=document.createElement('input'), text=document.createElement('span');input.type='checkbox';input.checked=selectedStorms.has(s.id);text.textContent=`${s.name} · ${s.year} · ${s.id}`;label.append(input,text);fragment.append(label);input.addEventListener('change',()=>toggleStorm(s,input.checked));}
@@ -176,7 +175,7 @@ $('#play').addEventListener('click',play);
 $('#storm-search').addEventListener('input',renderArchive);
 fetch(`${import.meta.env.BASE_URL}data/storms/catalog.json`).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()}).then(data=>{
  storms=data.storms.slice().sort(compareStorms);renderArchive();
- const initial=storms.find(s=>s.id==='AL092022')||storms[0];if(initial)toggleStorm(initial,true);else activateStorm(null);
+ const initial=defaultStorm(storms);if(initial)toggleStorm(initial,true);else activateStorm(null);
 }).catch(error=>{console.error(error);activateStorm(null);activeStatus='error';stormFailed=true;$('#storm-list').textContent='Storm archive unavailable. Reload to try again.';updateMarket();scheduleXol()});
 
 // Load the compact, local Census extract independently of map visibility. Canvas avoids

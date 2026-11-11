@@ -1,7 +1,9 @@
 import {test,expect} from '@playwright/test';
+import {selectIan} from './helpers.js';
 
 test('policy terms update covered loss without changing gross damage', async ({page})=>{
  await page.goto('/v2/');
+ await selectIan(page);
  await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
  const legend=page.locator('#market-legend'), results=page.locator('#xol-results');
  await expect(results).toContainText('Investor loss',{timeout:30000});
@@ -24,6 +26,7 @@ test('policy terms update covered loss without changing gross damage', async ({p
 
 test('custom policy terms reconcile with engine and discard pending selection', async ({page})=>{
  await page.goto('/v2/');
+ await selectIan(page);
  await page.getByRole('checkbox',{name:/Cedent 01/}).check({timeout:30000});
  await page.getByLabel('Attachment (% of exposure)').fill('0');
  await page.getByLabel('Policy deductible (% of replacement value)').fill('10');
