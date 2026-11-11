@@ -3,16 +3,15 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import {clampIndex} from './model.js';
 import {generateMarket, summarizeSelection} from './market.js';
-import {simulatePortfolio, layerOutcome} from './loss.js';
+import {simulatePortfolio, layerOutcome, classifyPoint} from './loss.js';
+import {compareStorms, observationLabel} from './storm-display.js';
 
 const app = document.querySelector('#app');
 app.innerHTML = `
   <div id="map" aria-label="Interactive map of selected historical storm tracks and cumulative wind swaths"></div>
   <header class="topbar"><a class="brand" href="/" title="Return to aboutILS"><span class="brand-mark">✳</span><span>about<span>ILS</span><small>STORM ATLAS</small></span></a><span class="header-tag"><i></i> HISTORICAL EXPLORER</span><a class="back" href="/">← <span>Back to aboutILS</span></a></header>
   <main class="panel"><h1>Historical events</h1>
-  <details class="control-section" open><summary>Hazard</summary><label for="storm-search">Find an event</label><input id="storm-search" type="search" placeholder="Name, year or ID"><div id="storm-list" aria-label="Event archive" aria-live="polite">Loading archive…</div><p id="storm-list-status" role="status"></p><div id="selected-storms" aria-label="Selected events"></div><p id="active-storm" role="status"></p><div class="section-heading"><div><h2>Lifetime wind footprint</h2></div></div>
-  <p class="description">Cumulative extent, not current winds.</p>
-  <div class="swath-legend" aria-label="Cumulative wind thresholds"><span data-swath="34"><i></i>34 kt · 39 mph</span><span data-swath="50"><i></i>50 kt · 58 mph</span><span data-swath="64"><i></i>64 kt · 74 mph</span></div><button id="track-toggle" aria-pressed="true">Hide track</button></details>
+  <details class="control-section" open><summary>Hazard</summary><label for="storm-search">Find an event</label><input id="storm-search" type="search" placeholder="Name, year or ID"><div id="storm-list" aria-label="Event archive" aria-live="polite">Loading archive…</div><p id="storm-list-status" role="status"></p><div id="selected-storms" aria-label="Selected events"></div><p id="active-storm" role="status"></p><p class="map-hint">Hover or tap for wind details.</p></details>
   <section class="exposure"><details class="control-section" open><summary>Exposure</summary><h2>Where homes are</h2><fieldset class="visual-options"><legend>Visualization options</legend><label><input id="tract-toggle" type="checkbox"> Housing tracts</label></fieldset><p id="tract-status" role="status"></p><button id="tract-retry" type="button" hidden>Retry loading data</button><details><summary>Find a tract</summary><label for="tract-search">Search Florida tract GEOID</label><input id="tract-search" type="search" inputmode="numeric" placeholder="Enter tract GEOID" disabled><div id="tract-results" aria-live="polite"></div><div id="tract-detail" aria-live="polite"></div></details></details><details class="control-section" open><summary>Cedents</summary><div class="market-heading"><h2>Fictional cedent market</h2><span class="help"><button type="button" aria-label="About modeled cedents" aria-describedby="market-help">?</button><span id="market-help" role="tooltip">Fictional insurers use modeled housing, not actual policies. Shares include other insurers statewide.</span></span></div><div class="market-controls"><label for="market-seed">Seed</label><input id="market-seed" type="number" min="0" max="4294967295" step="1" value="42"><button id="market-generate" type="button" disabled>Generate</button><label for="market-view">View</label><select id="market-view"><option value="impact">Event impact</option><option value="concentration">Concentration</option><option value="overlap">Overlap</option></select></div><div id="market-legend" aria-live="polite"></div><p id="market-error" role="status"></p><p id="market-residual"></p><div id="cedent-list" aria-label="Select cedents"></div><p id="market-summary" aria-live="polite">Loading market…</p></details><details class="control-section" open><summary>Underwriting</summary><section class="xol"><h2>Junior XOL scenario</h2><p class="xol-caption">Active event loss · assumed terms</p><label for="xol-capital">Upfront capital ($)</label><input id="xol-capital" type="number" min="0" step="1000" value="1000000"><div class="xol-terms policy-terms"><label>Policy deductible (% of replacement value)<input id="xol-policy-deductible" type="number" min="0" max="100" step="1" value="2"></label><label>Policy limit (% of replacement value)<input id="xol-policy-limit" type="number" min="0" max="100" step="1" value="100"></label></div><div class="xol-terms"><label>Attachment (% of exposure)<input id="xol-attachment" type="number" min="0" max="100" step="1" value="2"></label><label>Limit (% of exposure)<input id="xol-limit" type="number" min="0" max="100" step="1" value="8"></label><label>Rate on line (%)<input id="xol-rate" type="number" min="0" step="1" value="10"></label></div><p>Capital is split equally between selected cedents. Unused capital is not redistributed.</p><div id="xol-status" role="status"></div><div id="xol-results" aria-live="polite">Select cedents to model the event.</div><details><summary>How this works</summary><p>The selected event’s cumulative wind footprint is applied to fictional present-day exposure. Housing units are a proxy, valued at an assumed $300,000 each; threshold damage factors are assumed. A tract midpoint may fall outside its boundary. This is not observed damage or actual claims, and excludes surge and flood.</p><p>Policy terms apply to deterministic mean damage per unit, not a distribution of individual claims.</p><p>The layer pays on cedent event loss above attachment, up to its limit. Investor loss is the funded share; premium is principal × rate on line, and net is premium less investor loss. One event and one fully earned period are shown; fees and other costs are excluded.</p></details></section></details></section></main>
   <div class="map-label"><span>HISTORICAL VIEW</span><b id="map-storm">No storm selected</b><small id="map-storm-detail">Select storms in Hazard</small></div>
   <section class="timeline" aria-label="Storm timeline"><div class="timeline-head"><div><span class="overline">STORM TRACK</span><strong id="point-time">Loading track…</strong></div><div class="timeline-actions"><button id="play" aria-label="Play track">▶</button><span id="point-count"></span></div></div><input id="timeline" aria-label="Track point" type="range" min="0" value="0" step="0.001"><div class="timeline-foot"><span id="timeline-start"></span><span>ACTIVE STORM TRACK POINT · UTC</span><span id="timeline-end"></span></div></section>
@@ -23,8 +22,7 @@ L.control.zoom({position:'bottomright'}).addTo(map);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
 const $ = s => document.querySelector(s);
 const colors = {34:'#e3af58',50:'#eb845b',64:'#d85b52'};
-const labels = {34:'34 kt · tropical storm force',50:'50 kt · sustained wind',64:'64 kt · hurricane force'};
-let trackVisible=true, index=0, points=[], marker, timer, stormFailed=false;
+let index=0, points=[], marker, timer, stormFailed=false;
 let storms=[], activeId=null, activeStatus='loading';
 const selectedStorms=new Set(), stormCache=new Map();
 let tracksPromise;
@@ -62,9 +60,26 @@ function renderStormLayers(s,entry){
  if(!entry.unwrapped && entry.raw?.length){let previous=map.getCenter().lng;entry.unwrapped=entry.raw.map(p=>{const lon=p.lon+360*Math.round((previous-p.lon)/360);previous=lon;return {...p,lon}})}
  if(!entry.track && entry.unwrapped?.length){entry.track=L.polyline(entry.unwrapped.map(p=>[p.lat,p.lon]),{pane:'trackPane',className:'archive-track',color:trackColor(s.id),weight:2,opacity:.8,dashArray:'4 6',interactive:false});}
  if(!entry.swathLayer && entry.swath) entry.swathLayer=L.layerGroup([34,50,64].map(wind=>L.geoJSON(entry.swath,{filter:f=>f.properties.RADII===wind,style:{className:`swath-layer swath-${wind}`,color:colors[wind],weight:1,opacity:.9,fillColor:colors[wind],fillOpacity:.38},interactive:false})));
- if(entry.swathLayer)entry.swathLayer.addTo(map); if(entry.track && trackVisible)entry.track.addTo(map);
+ if(!entry.observations && entry.unwrapped?.length) entry.observations=L.layerGroup(entry.unwrapped.map(p=>{
+  const detail=document.createElement('div');detail.textContent=`${stormName(s)} · ${p.time.replace('T',' ').replace(/Z$/, ' UTC')} · ${observationLabel(p.wind)}`;
+  return L.circleMarker([p.lat,p.lon],{pane:'trackPane',className:'track-observation',radius:3,color:trackColor(s.id),weight:1,fillOpacity:.8}).bindTooltip(detail,{direction:'top',className:'track-info'}).bindPopup(detail.cloneNode(true)).on('popupopen',e=>e.target.closeTooltip());
+ }));
+ if(entry.swathLayer)entry.swathLayer.addTo(map); if(entry.track)entry.track.addTo(map);if(entry.observations)entry.observations.addTo(map);
 }
-function removeStormLayers(entry){entry?.track?.remove();entry?.swathLayer?.remove()}
+function removeStormLayers(entry){entry?.track?.remove();entry?.observations?.remove();entry?.swathLayer?.remove()}
+const swathInfo=L.tooltip({direction:'top',offset:[0,-8],className:'swath-info'});
+function showSwathInfo(e){
+ const lon=((e.latlng.lng+180)%360+360)%360-180, lines=[];
+ for(const id of selectedStorms){
+  const entry=stormCache.get(id), storm=storms.find(s=>s.id===id);
+  if(!entry?.swath)continue;
+  try {const wind=classifyPoint([lon,e.latlng.lat],entry.swath);if(wind)lines.push(`${stormName(storm)} · ${id}: ≥${wind} kt (${Math.round(wind*1.15078)} mph) threshold`)} catch { /* invalid event data is reported separately */ }
+ }
+ if(!lines.length){map.closeTooltip(swathInfo);return}
+ const content=document.createElement('div');content.textContent=`${lines.join(' | ')} · Cumulative extent, not an exact wind speed`;
+ swathInfo.setLatLng(e.latlng).setContent(content).addTo(map);
+}
+map.on('mousemove',showSwathInfo);map.on('click',showSwathInfo);map.on('mouseout',()=>map.closeTooltip(swathInfo));
 let archiveMatches=[], archiveShown=0;
 const archiveMore=document.createElement('button');
 archiveMore.type='button';archiveMore.id='archive-more';archiveMore.textContent='Show more';archiveMore.setAttribute('aria-controls','storm-list');
@@ -131,11 +146,11 @@ function selectPoint(i) {
   $('#point-count').textContent=t<0.001?`${lo+1} / ${points.length}`:'Interpolated';
   const coords=[lerp(f.geometry.coordinates[1],next.geometry.coordinates[1]),lerp(f.geometry.coordinates[0],next.geometry.coordinates[0])];
   const hue=Math.max(0,45-Math.max(0,(intensity??30)-30)*.38);
-  if(trackVisible) {
+  {
     if(!marker) marker=L.marker(coords,{interactive:false,icon:L.divIcon({className:'storm-marker',html:'<span class="storm-symbol"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="currentColor" d="M20 3C9 3 3 10 2 20c3-5 8-8 14-8-3 2-5 5-5 8 0 5 4 9 9 9 4 0 7-2 9-6 1 8-5 14-14 14 12 2 23-6 23-18C38 10 30 3 20 3Zm0 12a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg></span>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(map);
     else {marker.setLatLng(coords);if(!map.hasLayer(marker))marker.addTo(map)}
     marker.getElement()?.querySelector('.storm-symbol')?.style.setProperty('--storm-hue',hue);
-  } else if(marker) marker.remove();
+  }
 }
 function stop() {if(timer)cancelAnimationFrame(timer);timer=null;$('#play').textContent='▶';$('#play').setAttribute('aria-label','Play track');}
 function play() {
@@ -152,10 +167,9 @@ function play() {
 }
 $('#timeline').addEventListener('input',e=>{stop();if(points.length)selectPoint(+e.target.value)});
 $('#play').addEventListener('click',play);
-$('#track-toggle').addEventListener('click',e=>{trackVisible=!trackVisible;e.currentTarget.textContent=trackVisible?'Hide track':'Show track';e.currentTarget.setAttribute('aria-pressed',String(trackVisible));for(const id of selectedStorms){const t=stormCache.get(id)?.track;if(t){if(trackVisible)t.addTo(map);else t.remove()}}if(points.length)selectPoint(index)});
 $('#storm-search').addEventListener('input',renderArchive);
 fetch(`${import.meta.env.BASE_URL}data/storms/catalog.json`).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()}).then(data=>{
- storms=data.storms.slice().sort((a,b)=>b.year-a.year || a.name.localeCompare(b.name));renderArchive();
+ storms=data.storms.slice().sort(compareStorms);renderArchive();
  const initial=storms.find(s=>s.id==='AL092022')||storms[0];if(initial)toggleStorm(initial,true);else activateStorm(null);
 }).catch(error=>{console.error(error);activateStorm(null);activeStatus='error';stormFailed=true;$('#storm-list').textContent='Storm archive unavailable. Reload to try again.';updateMarket();scheduleXol()});
 

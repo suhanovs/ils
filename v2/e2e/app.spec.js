@@ -5,7 +5,7 @@ test('hazard controls are concise without repeating the active event', async ({p
  await expect(page.getByLabel('Find an event')).toBeVisible();
  await expect(page.locator('#selected-storms')).toContainText('IAN (2022)');
  await expect(page.locator('#active-storm')).toBeEmpty();
- await expect(page.getByText('Lifetime wind footprint')).toBeVisible();
+ await expect(page.getByText('Lifetime wind footprint')).toHaveCount(0);
  const text=await page.locator('.panel').innerText();
  expect((text.match(/\bstorms?\b/gi)||[]).length).toBeLessThanOrEqual(1);
 });
@@ -39,20 +39,19 @@ test('failed automatic tract load can be retried without enabling housing', asyn
 test('explores the actual Ian track and static cumulative swaths', async ({page}) => {
   await page.goto('/v2/');
   await expect(page.getByRole('heading', {name:'Historical events'})).toBeVisible();
-  await expect(page.getByText('Lifetime wind footprint')).toBeVisible();
+  await expect(page.getByText('Lifetime wind footprint')).toHaveCount(0);
   await expect(page.locator('.archive-track').first()).toBeVisible();
   const before = await page.locator('#point-time').textContent();
   await page.getByRole('slider', {name:'Track point'}).fill('10');
   await expect(page.locator('#point-time')).not.toHaveText(before);
-  await page.getByRole('button', {name:'Hide track'}).click();
-  await expect(page.getByRole('button', {name:'Show track'})).toBeVisible();
+  await expect(page.getByRole('button', {name:'Hide track'})).toHaveCount(0);
 });
 
 test('mobile layout exposes map and working controls without horizontal overflow', async ({page}) => {
   await page.setViewportSize({width:375,height:812});
   await page.goto('/v2/');
   await expect(page.locator('#map')).toBeVisible();
-  await expect(page.locator('[data-swath="64"]')).toBeVisible();
+  await expect(page.getByText(/Hover or tap/)).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   await page.getByRole('button', {name:'Play track'}).click();
   await expect(page.getByRole('button', {name:'Pause track'})).toBeVisible();
@@ -91,7 +90,7 @@ for (const viewport of [{width:1280,height:800},{width:375,height:812}]) {
 test('explains the map in plain language without legalistic warnings', async ({page}) => {
   await page.goto('/v2/');
   await expect(page.getByRole('heading',{name:'Where homes are'})).toBeVisible();
-  await expect(page.getByText(/Cumulative extent, not current winds/)).toBeVisible();
+  await expect(page.getByText(/Hover or tap/)).toBeVisible();
   await expect(page.getByText('Read this map carefully')).toHaveCount(0);
   await expect(page.getByText('Sources & assumptions')).toHaveCount(0);
 });
@@ -120,16 +119,15 @@ for (const width of [1280,375]) {
   await page.getByLabel('Seed', {exact:true}).fill('43');
   await page.getByRole('button',{name:'Generate'}).click();
   await expect(page.locator('#market-summary')).not.toHaveText(before);
-  await expect(page.locator('[data-swath="50"]')).toBeVisible();
+  await expect(page.locator('path.swath-50').first()).toBeAttached();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
  });
 }
 
 test('shows all cumulative wind extents together', async ({page}) => {
  await page.goto('/v2/');
- await expect(page.locator('[data-swath]')).toHaveCount(3);
- for (const wind of ['34','50','64']) await expect(page.locator(`[data-swath="${wind}"]`)).toBeVisible();
- await expect(page.getByText(/Cumulative extent, not current winds/i)).toBeVisible();
+ for (const wind of ['34','50','64']) await expect(page.locator(`path.swath-${wind}`).first()).toBeAttached();
+ await expect(page.getByText(/Hover or tap/)).toBeVisible();
  await expect(page.locator('[data-wind]')).toHaveCount(0);
 });
 test('scrubbing interpolates the track without changing static swaths', async ({page}) => {
@@ -417,8 +415,6 @@ test('selected tracks have stable distinct colors and removable accessible chips
  await page.getByRole('button',{name:/Remove Ian.*AL092022/i}).click();
  await expect(page.locator('path.archive-track')).toHaveCount(1);
  await expect(page.locator('#selected-storms')).not.toContainText('AL092022');
- await page.getByRole('button',{name:'Hide track'}).click();
- await page.getByRole('button',{name:'Show track'}).click();
  await expect(page.locator('path.archive-track')).toHaveAttribute('stroke',colors[1]);
  await expect(page).not.toHaveTitle(/Ian/i);
 });
@@ -541,7 +537,7 @@ test('eight selected tracks remain distinct after palette overflow and removal',
  await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms}}));
  await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify(Object.fromEntries(storms.map(s=>[s.id,track]))))}));
  await page.goto('/v2/');
- for(let i=2;i<=9;i++) await page.getByRole('checkbox',{name:new RegExp(`Storm ${i} ·`)}).check();
+ for(let i=1;i<=8;i++) await page.getByRole('checkbox',{name:new RegExp(`Storm ${i} ·`)}).check();
  await expect(page.locator('path.archive-track')).toHaveCount(9);
  await page.getByRole('button',{name:/Remove Storm 1 /}).click();
  await expect(page.locator('path.archive-track')).toHaveCount(8);
@@ -557,4 +553,68 @@ test('GIS-only event identifies its preliminary track', async ({page})=>{
  await page.getByRole('checkbox',{name:/AL012026/}).check();
  await expect(page.locator('.storm-chip-select[aria-pressed=true]')).toContainText('AL012026');
  await expect(page.locator('#active-storm')).toContainText('Preliminary track');
+});
+
+test('map offers threshold and observed track details without old controls', async ({page})=>{
+ await page.goto('/v2/');
+ await expect(page.getByText('Lifetime wind footprint')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Hide track'})).toHaveCount(0);
+ await expect(page.getByText(/Hover or tap/)).toBeVisible();
+ await expect(page.locator('.track-observation').first()).toBeAttached();
+ await page.locator('.track-observation').first().dispatchEvent('mouseover');
+ await expect(page.locator('.leaflet-tooltip')).toContainText('kt');
+});
+
+test('overlapping events report their strongest cumulative thresholds on hover and tap',async({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ const polygon=(wind)=>({type:'Feature',properties:{RADII:wind},geometry:{type:'Polygon',coordinates:[[[-84,23],[-78,23],[-78,28],[-84,28],[-84,23]]]}});
+ for(const [id,winds] of [['AL092022',[34,64]],['AL122005',[34,50]]]) await page.route(`**/storms/swaths/${id}.bin`,r=>r.fulfill({body:gzipSync(JSON.stringify({type:'FeatureCollection',features:winds.map(polygon)}))}));
+ await page.goto('/v2/');
+ await page.getByLabel('Find an event').fill('Katrina');
+ await page.getByRole('checkbox',{name:/KATRINA.*2005/i}).first().check();
+ await expect(page.locator('path.swath-50')).toHaveCount(1);
+ const box=await page.locator('#map').boundingBox();
+ await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+ const tip=page.locator('.swath-info');
+ await expect(tip).toContainText('AL092022: ≥64 kt');
+ await expect(tip).toContainText('AL122005: ≥50 kt');
+ await expect(tip).toContainText('not an exact wind speed');
+ await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
+ await expect(tip).toContainText('AL122005');
+});
+
+test('real pointer sees track observations and swaths over selected housing and cedent',async({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ const track=[{time:'2022-09-01T00:00:00Z',lat:25.5,lon:-81,wind:96},{time:'2022-09-01T06:00:00Z',lat:26,lon:-80,wind:null}];
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL092022:track}))}));
+ await page.route('**/storms/swaths/AL092022.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({type:'FeatureCollection',features:[{type:'Feature',properties:{RADII:64},geometry:{type:'Polygon',coordinates:[[[-84,23],[-78,23],[-78,28],[-84,28],[-84,23]]]}}]}))}));
+ await page.goto('/v2/');
+ await page.getByRole('checkbox',{name:'Housing tracts'}).check();
+ await page.getByRole('checkbox',{name:/Cedent 01/}).check();
+ await expect(page.locator('.track-observation')).toHaveCount(2);
+ const box=await page.locator('#map').boundingBox();
+ await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+ await expect(page.locator('.leaflet-tooltip').filter({hasText:'Category 3'})).toContainText('96 kt / 110 mph');
+ await page.mouse.click(box.x+box.width/2,box.y+box.height/2);
+ await expect(page.locator('.leaflet-popup')).toContainText('Category 3');
+ await page.mouse.move(box.x+box.width/2+45,box.y+box.height/2);
+ await expect(page.locator('.swath-info')).toContainText('≥64 kt');
+ await expect(page.locator('#xol-results')).toContainText('Investor loss');
+});
+
+test('touchscreen taps reveal swath thresholds and track observations',async({browser})=>{
+ const {gzipSync}=await import('node:zlib');
+ const context=await browser.newContext({viewport:{width:375,height:812},hasTouch:true,isMobile:true});
+ const page=await context.newPage();
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({AL092022:[{time:'2022-09-01T00:00:00Z',lat:25.5,lon:-81,wind:83},{time:'2022-09-01T06:00:00Z',lat:26,lon:-80,wind:null}]}))}));
+ await page.route('**/storms/swaths/AL092022.bin',r=>r.fulfill({body:gzipSync(JSON.stringify({type:'FeatureCollection',features:[{type:'Feature',properties:{RADII:50},geometry:{type:'Polygon',coordinates:[[[-84,23],[-78,23],[-78,28],[-84,28],[-84,23]]]}}]}))}));
+ await page.goto('http://127.0.0.1:4174/v2/');
+ await expect(page.locator('.track-observation')).toHaveCount(2);
+ const box=await page.locator('#map').boundingBox();
+ await page.touchscreen.tap(box.x+box.width/2-40,box.y+box.height/2);
+ await expect(page.locator('.swath-info')).toContainText('≥50 kt');
+ await page.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);
+ await expect(page.locator('.leaflet-popup').filter({hasText:'Category 2'})).toBeVisible();
+ await expect(page.locator('.track-info')).toHaveCount(0);
+ await context.close();
 });
