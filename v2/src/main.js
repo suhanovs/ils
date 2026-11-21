@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import {sampleAtElapsed, formatElapsed} from './elapsed.js';
+import {sampleAtProgress} from './elapsed.js';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import {clampIndex} from './model.js';
@@ -184,7 +184,7 @@ function selectPoint(i) {
   index=clampIndex(i,points.length); const lo=Math.floor(index), hi=Math.min(lo+1,points.length-1), f=points[lo], next=points[hi], t=index-lo;
   const lerp=(a,b)=>a+(b-a)*t;
   const time=lerp(pointTime(f.properties),pointTime(next.properties));
-  const intensity=f.properties.INTENSITY==null || (t>=0.001 && next.properties.INTENSITY==null) ? null : lerp(f.properties.INTENSITY,next.properties.INTENSITY);
+  const intensity=f.properties.INTENSITY==null || (t>0 && next.properties.INTENSITY==null) ? null : lerp(f.properties.INTENSITY,next.properties.INTENSITY);
   $('#timeline').value=index; $('#point-time').textContent=`${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'UTC'}).format(time)} UTC · ${intensity==null?'wind unavailable':`${t<0.001?intensity:intensity.toFixed(1)} kt`}`;
   $('#point-count').textContent=t<0.001?`${lo+1} / ${points.length}`:'Interpolated';
   const coords=[lerp(f.geometry.coordinates[1],next.geometry.coordinates[1]),lerp(f.geometry.coordinates[0],next.geometry.coordinates[0])];
@@ -197,49 +197,42 @@ function selectPoint(i) {
 }
 function refreshGroup(){
  const group=selectedStorms.size>1, slider=$('#timeline');
- slider.setAttribute('aria-label',group?'Elapsed time':'Track point');$('#timeline-kind').textContent=group?'SYNCED PROGRESS':'ACTIVE STORM TRACK POINT · UTC';
- if(!group){slider.step='0.001';for(const entry of stormCache.values())entry.movingMarker?.remove();return}
+ slider.setAttribute('aria-label',group?'Track progress':'Track point');$('#timeline-kind').textContent=group?'SYNCED PROGRESS':'ACTIVE STORM TRACK POINT · UTC';
+ if(!group){slider.removeAttribute('aria-valuetext');slider.step='0.001';for(const entry of stormCache.values())entry.movingMarker?.remove();return}
  if(marker)marker.remove();
  const entries=[...selectedStorms].map(id=>stormCache.get(id));
  const pending=entries.some(e=>!e || e.status==='loading'), failed=entries.some(e=>e?.trackError);
- groupDuration=Math.max(0,...entries.map(e=>e?.raw?.length?Date.parse(e.raw.at(-1).time)-Date.parse(e.raw[0].time):0));
- slider.max=groupDuration;slider.step='1';slider.disabled=pending || failed || !groupDuration;$('#play').disabled=slider.disabled;
- $('#timeline-start').textContent='Day 1 + 0h';$('#timeline-end').textContent=formatElapsed(groupDuration);
+ groupDuration=1000;
+ slider.max=groupDuration;slider.step='0.001';slider.disabled=pending || failed || !entries.some(e=>e?.raw?.length>1);$('#play').disabled=slider.disabled;
+ $('#timeline-start').textContent='0%';$('#timeline-end').textContent='100%';
  if(pending || failed){$('#point-time').textContent=pending?'Loading tracks…':'Track unavailable';$('#point-count').textContent='';for(const e of entries)e?.movingMarker?.remove();return}
  drawGroup(Math.min(elapsed,groupDuration));
 }
 function drawGroup(value){
- elapsed=Math.max(0,Math.min(value,groupDuration));$('#timeline').value=elapsed;$('#point-time').textContent=formatElapsed(elapsed);$('#point-count').textContent='';
+ elapsed=Math.max(0,Math.min(value,groupDuration));$('#timeline').value=elapsed;$('#point-time').textContent=`${Math.round(elapsed/groupDuration*100)}%`;$('#timeline').setAttribute('aria-valuetext',$('#point-time').textContent);$('#point-count').textContent='';
  for(const id of selectedStorms){
   const entry=stormCache.get(id), track=entry?.unwrapped;if(!track?.length)continue;
-  const duration=Date.parse(track.at(-1).time)-Date.parse(track[0].time);
-  const sample=sampleAtElapsed(track,elapsed/groupDuration*duration);
+  const sample=sampleAtProgress(track,elapsed/groupDuration);
   if(!sample){entry.movingMarker?.remove();continue}
   if(!entry.movingMarker)entry.movingMarker=new SmoothMarker(sample.coordinates,{interactive:false,icon:L.divIcon({className:'storm-marker',html:'<span class="storm-symbol"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="currentColor" d="M20 3C9 3 3 10 2 20c3-5 8-8 14-8-3 2-5 5-5 8 0 5 4 9 9 9 4 0 7-2 9-6 1 8-5 14-14 14 12 2 23-6 23-18C38 10 30 3 20 3Zm0 12a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg></span>',iconSize:[32,32],iconAnchor:[16,16]})});
   entry.movingMarker.setLatLng(sample.coordinates);if(!map.hasLayer(entry.movingMarker))entry.movingMarker.addTo(map);
   const element=entry.movingMarker.getElement();if(element){element.dataset.stormId=id;element.querySelector('.storm-symbol')?.style.setProperty('--storm-hue',Math.max(0,45-Math.max(0,(sample.wind??30)-30)*.38));}
  }
 }
-function playGroup(){
- if($('#play').disabled)return;
- if(elapsed>=groupDuration)drawGroup(0);
- $('#play').textContent='❚❚';$('#play').setAttribute('aria-label','Pause track');
- let previous=performance.now(), progress=elapsed;
- function frame(now){progress+=Math.max(0,Math.min(50,now-previous))*3600000/60;previous=now;drawGroup(Math.min(groupDuration,progress));if(elapsed>=groupDuration)stop();else timer=requestAnimationFrame(frame)}
- timer=requestAnimationFrame(frame);
-}
 function stop() {if(timer)cancelAnimationFrame(timer);timer=null;$('#play').textContent='▶';$('#play').setAttribute('aria-label','Play track');}
 function play() {
-  if(timer){stop();return} if(selectedStorms.size>1){playGroup();return} if(index>=points.length-1)selectPoint(0);
-  $('#play').textContent='❚❚';$('#play').setAttribute('aria-label','Pause track');
-  let previous=performance.now();const lo=Math.floor(index), fraction=index-lo;
-  let current=pointTime(points[lo].properties)+(pointTime(points[Math.min(lo+1,points.length-1)].properties)-pointTime(points[lo].properties))*fraction;
-  const end=pointTime(points.at(-1).properties);
-  function frame(now){current=Math.min(end,current+Math.max(0,Math.min(50,now-previous))*3600000/60);previous=now;let i=0;while(i<points.length-2 && pointTime(points[i+1].properties)<current)i++;
-    const from=pointTime(points[i].properties), to=pointTime(points[i+1].properties);selectPoint(i+(current-from)/(to-from));
-    if(current>=end)stop();else timer=requestAnimationFrame(frame);
-  }
-  timer=requestAnimationFrame(frame);
+ if(timer){stop();return} if($('#play').disabled)return;
+ const group=selectedStorms.size>1, max=group?groupDuration:points.length-1;
+ let start=group?elapsed:index;
+ if(start>=max){start=0;if(group)drawGroup(0);else selectPoint(0)}
+ $('#play').textContent='❚❚';$('#play').setAttribute('aria-label','Pause track');
+ const started=performance.now();
+ function frame(now){
+  const value=Math.min(max,start+(now-started)*max/3000);
+  if(group)drawGroup(value);else selectPoint(value);
+  if(value>=max)stop();else timer=requestAnimationFrame(frame);
+ }
+ timer=requestAnimationFrame(frame);
 }
 $('#timeline').addEventListener('input',e=>{stop();if(selectedStorms.size>1)drawGroup(+e.target.value);else if(points.length)selectPoint(+e.target.value)});
 $('#play').addEventListener('click',play);
