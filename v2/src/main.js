@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import {sampleAtProgress} from './elapsed.js';
+import {sampleAtProgress, samplePlayback, progressAtIndex, smoothedPath} from './elapsed.js';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import {clampIndex} from './model.js';
@@ -29,7 +29,7 @@ let index=0, points=[], marker, timer, stormFailed=false;
 let storms=[], activeId=null, activeStatus='loading', autoDefaultId=null;
 const selectedStorms=new Set(), stormCache=new Map();
 let tracksPromise;
-let elapsed=0, groupDuration=0;
+let elapsed=0, groupDuration=0, playbackCursor=null;
 const trackPalette=['#72e5e0','#f5c76b','#eaa8fa','#9fdc78','#ff9b9b','#91b9ff','#ffd4a0','#c4c4ff'];
 const stormColors=new Map();
 function trackColor(id){return stormColors.get(id)}
@@ -62,7 +62,7 @@ function loadStorm(s){
 }
 function renderStormLayers(s,entry){
  if(!entry.unwrapped && entry.raw?.length){let previous=map.getCenter().lng;entry.unwrapped=entry.raw.map(p=>{const lon=p.lon+360*Math.round((previous-p.lon)/360);previous=lon;return {...p,lon}})}
- if(!entry.track && entry.unwrapped?.length){entry.track=L.polyline(entry.unwrapped.map(p=>[p.lat,p.lon]),{pane:'trackPane',className:'archive-track',color:trackColor(s.id),weight:2,opacity:.8,dashArray:'4 6',interactive:false});}
+ if(!entry.track && entry.unwrapped?.length){entry.track=L.polyline(smoothedPath(entry.unwrapped),{pane:'trackPane',className:'archive-track',color:trackColor(s.id),weight:2,opacity:.8,dashArray:'4 6',interactive:false});}
  if(!entry.swathLayer && entry.swath) entry.swathLayer=L.layerGroup([34,50,64].map(wind=>L.geoJSON(entry.swath,{filter:f=>f.properties.RADII===wind,style:{className:`swath-layer swath-${wind}`,color:colors[wind],weight:1,opacity:.9,fillColor:colors[wind],fillOpacity:.38},interactive:false})));
  if(!entry.observations && entry.unwrapped?.length) entry.observations=L.layerGroup(entry.unwrapped.map(p=>{
   const detail=document.createElement('div');detail.textContent=`${stormName(s)} · ${p.time.replace('T',' ').replace(/Z$/, ' UTC')} · ${observationLabel(p.wind)}`;
@@ -164,7 +164,7 @@ function toggleStorm(s,on){
  syncArchive();refreshGroup();
 }
 function activateStorm(id){
- if(selectedStorms.size<=1)stop();activeId=id;const s=storms.find(x=>x.id===id), entry=stormCache.get(id);window.stormSwath=null;points=[];index=0;
+ if(selectedStorms.size<=1)stop();activeId=id;playbackCursor=null;const s=storms.find(x=>x.id===id), entry=stormCache.get(id);window.stormSwath=null;points=[];index=0;
  if(marker)marker.remove();
  activeStatus=!s?'none':!entry || entry.status==='loading'?'loading':entry.swathError?'error':!s.hasSwath?'unavailable':entry.swath?'ready':'error';
  stormFailed=activeStatus==='error';
@@ -180,14 +180,14 @@ function activateStorm(id){
  renderSelected();updateMarket();scheduleXol();refreshGroup();
 }
 const pointTime = p => Date.parse(p.time);
-function selectPoint(i) {
+function selectPoint(i, playbackCoordinates=null) {
   index=clampIndex(i,points.length); const lo=Math.floor(index), hi=Math.min(lo+1,points.length-1), f=points[lo], next=points[hi], t=index-lo;
   const lerp=(a,b)=>a+(b-a)*t;
   const time=lerp(pointTime(f.properties),pointTime(next.properties));
   const intensity=f.properties.INTENSITY==null || (t>0 && next.properties.INTENSITY==null) ? null : lerp(f.properties.INTENSITY,next.properties.INTENSITY);
   $('#timeline').value=index; $('#point-time').textContent=`${new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit',hourCycle:'h23',timeZone:'UTC'}).format(time)} UTC · ${intensity==null?'wind unavailable':`${t<0.001?intensity:intensity.toFixed(1)} kt`}`;
   $('#point-count').textContent=t<0.001?`${lo+1} / ${points.length}`:'Interpolated';
-  const coords=[lerp(f.geometry.coordinates[1],next.geometry.coordinates[1]),lerp(f.geometry.coordinates[0],next.geometry.coordinates[0])];
+  const coords=playbackCoordinates || samplePlayback(stormCache.get(activeId).unwrapped,progressAtIndex(stormCache.get(activeId).unwrapped,index)).coordinates;
   const hue=Math.max(0,45-Math.max(0,(intensity??30)-30)*.38);
   {
     if(!marker) marker=new SmoothMarker(coords,{interactive:false,icon:L.divIcon({className:'storm-marker',html:'<span class="storm-symbol"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="currentColor" d="M20 3C9 3 3 10 2 20c3-5 8-8 14-8-3 2-5 5-5 8 0 5 4 9 9 9 4 0 7-2 9-6 1 8-5 14-14 14 12 2 23-6 23-18C38 10 30 3 20 3Zm0 12a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg></span>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(map);
@@ -222,19 +222,20 @@ function drawGroup(value){
 function stop() {if(timer)cancelAnimationFrame(timer);timer=null;$('#play').textContent='▶';$('#play').setAttribute('aria-label','Play track');}
 function play() {
  if(timer){stop();return} if($('#play').disabled)return;
- const group=selectedStorms.size>1, max=group?groupDuration:points.length-1;
- let start=group?elapsed:index;
- if(start>=max){start=0;if(group)drawGroup(0);else selectPoint(0)}
+ const group=selectedStorms.size>1, max=group?groupDuration:1;
+ const track=group?null:stormCache.get(activeId)?.unwrapped;
+ let start=group?elapsed:(playbackCursor??progressAtIndex(track,index));
+ if(start>=max){start=0;if(group)drawGroup(0);else {playbackCursor=0;selectPoint(0)}}
  $('#play').textContent='❚❚';$('#play').setAttribute('aria-label','Pause track');
  const started=performance.now();
  function frame(now){
   const value=Math.min(max,start+(now-started)*max/3000);
-  if(group)drawGroup(value);else selectPoint(value);
+  if(group)drawGroup(value);else {playbackCursor=value;const sample=samplePlayback(track,value);selectPoint(sample.rawIndex,sample.coordinates)}
   if(value>=max)stop();else timer=requestAnimationFrame(frame);
  }
  timer=requestAnimationFrame(frame);
 }
-$('#timeline').addEventListener('input',e=>{stop();if(selectedStorms.size>1)drawGroup(+e.target.value);else if(points.length)selectPoint(+e.target.value)});
+$('#timeline').addEventListener('input',e=>{stop();if(selectedStorms.size>1)drawGroup(+e.target.value);else if(points.length){playbackCursor=null;selectPoint(+e.target.value)}});
 $('#play').addEventListener('click',play);
 $('#storm-search').addEventListener('input',renderArchive);
 fetch(`${import.meta.env.BASE_URL}data/storms/catalog.json`).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()}).then(data=>{

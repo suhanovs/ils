@@ -269,3 +269,28 @@ for(const group of [false,true]) test(`${group?'group':'single'} irregular obser
  expect(result).toBeGreaterThan((1-paused/max)*3000-100);expect(result).toBeLessThan((1-paused/max)*3000+180);
  const final=await xs();for(let i=0;i<final.length;i++)expect(final[i]).toBeCloseTo(end[i],2);
 });
+
+
+test('duplicate advisories remain individually scrubbable and resume without a position jump',async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ const storms=[{id:'AL012024',name:'Duplicate',year:2024,basin:'AL',hasSwath:false}];
+ const tracks={AL012024:[{time:'2024-01-01T00:00Z',lat:20,lon:-80,wind:30},{time:'2024-01-01T06:00Z',lat:20,lon:-80,wind:50},{time:'2024-01-01T12:00Z',lat:23,lon:-77,wind:70},{time:'2024-01-01T18:00Z',lat:24,lon:-75,wind:80}]};
+ await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms}}));await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify(tracks))}));
+ await page.goto('/v2/');const slider=page.locator('#timeline');await expect(slider).toBeEnabled();
+ await slider.fill('0');await expect(page.locator('#point-time')).toContainText('30 kt');const initial=await page.locator('.storm-marker').getAttribute('style');
+ await slider.fill('1');await expect(page.locator('#point-time')).toContainText('50 kt');await expect(page.locator('#point-time')).toContainText('06:00');expect(await page.locator('.storm-marker').getAttribute('style')).toBe(initial);
+ await slider.fill('1.5');const before=await page.locator('.storm-marker').boundingBox();
+ await page.locator('#play').click();await page.waitForTimeout(80);await page.locator('#play').click();const after=await page.locator('.storm-marker').boundingBox();expect(Math.hypot(after.x-before.x,after.y-before.y)).toBeLessThan(10);
+ const paused=await slider.inputValue();await page.waitForTimeout(100);expect(await slider.inputValue()).toBe(paused);
+ await page.locator('#play').click();await page.waitForTimeout(80);await page.locator('#play').click();expect(Number(await slider.inputValue())).toBeGreaterThan(Number(paused));
+});
+
+for(const group of [false,true]) test(`real ${group?'2020 group Fay':'default Isaias'} advances without stationary frame runs`,async ({page})=>{
+ await page.goto('/v2/');if(group){await page.getByLabel('Find an event').fill('2020');await page.getByRole('checkbox',{name:'Select all 2020 events'}).check()}
+ const slider=page.locator('#timeline');await expect(slider).toBeEnabled({timeout:30000});await expect(page.locator('.storm-marker')).toHaveCount(group?30:1,{timeout:30000});await expect(page.getByRole('button',{name:'Play track'})).toBeEnabled();
+ const result=await page.evaluate(group=>new Promise(resolve=>{
+  const marker=document.querySelector(group?'.storm-marker[data-storm-id="AL062020"]':'.storm-marker'),button=document.querySelector('#play');let previous=null,run=0,maxRun=0,frames=0;const start=performance.now();button.click();
+  function frame(){const xy=marker.style.transform;if(previous===xy)run++;else run=0;maxRun=Math.max(run,maxRun);previous=xy;frames++;if(button.getAttribute('aria-label')==='Play track')resolve({maxRun,frames,ms:performance.now()-start});else requestAnimationFrame(frame)}requestAnimationFrame(frame);
+ }),group);
+ expect(result.frames).toBeGreaterThan(80);expect(result.maxRun).toBeLessThan(3);expect(result.ms).toBeGreaterThan(2800);expect(result.ms).toBeLessThan(3300);
+});

@@ -539,23 +539,24 @@ test('mock antimeridian track and playback use the same short world path',async 
  await page.getByLabel('Find an event').fill('AL012024');
  await expect(page.getByRole('checkbox',{name:/AL012024/})).toBeChecked();
  await expect(page.locator('.storm-chip-select[aria-pressed=true]')).toContainText('2024');
+ await expect(page.locator('path.archive-track')).toHaveCount(1);
  const result=await page.evaluate(async()=>{
   const response=await fetch('/v2/data/storms/tracks.bin');
   const tracks=await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).json();
   const chronological=Object.values(tracks).every(track=>track.every((p,i)=>!i || Date.parse(track[i-1].time)<Date.parse(p.time)));
   const raw=tracks.AL012024; const crossing=raw.findIndex((p,i)=>i && Math.abs(p.lon-raw[i-1].lon)>180);
-  let layer;window.__testMap.eachLayer(l=>{if(l.options?.className==='archive-track' && l.getLatLngs().length===raw.length) layer=l});
+  let layer;window.__testMap.eachLayer(l=>{if(l.options?.className==='archive-track') layer=l});
   return {chronological, crossing, raw, path:layer?.getLatLngs().map(p=>p.lng)};
  });
- expect(result.chronological).toBe(true); expect(result.crossing).toBeGreaterThan(0); expect(result.path).toHaveLength(result.raw.length);
+ expect(result.chronological).toBe(true); expect(result.crossing).toBeGreaterThan(0); expect(result.path).toHaveLength((result.raw.length-1)*12+1);
  expect(result.path.every((x,i)=>!i || Math.abs(x-result.path[i-1])<=180)).toBe(true);
  const slider=page.getByRole('slider',{name:'Track point'});
  await slider.fill(String(result.crossing-0.5));
  const markerLon=()=>page.evaluate(()=>{let lon;window.__testMap.eachLayer(l=>{if(l.options?.icon?.options?.className==='storm-marker')lon=l.getLatLng().lng});return lon});
- expect(await markerLon()).toBeCloseTo((result.path[result.crossing-1]+result.path[result.crossing])/2,4);
+ expect(await markerLon()).toBeCloseTo(result.path[(result.crossing-.5)*12],4);
  await page.getByRole('button',{name:'Play track'}).click();
  await expect.poll(async()=>Number(await slider.inputValue())).toBeGreaterThan(result.crossing-0.5);
- expect(Math.abs((await markerLon())-result.path[result.crossing])).toBeLessThan(5);
+ expect(Math.abs((await markerLon())-result.path[result.crossing*12])).toBeLessThan(5);
  await page.getByRole('button',{name:'Pause track'}).click();
 });
 
