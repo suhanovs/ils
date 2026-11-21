@@ -1,4 +1,5 @@
 import L from 'leaflet';
+import {sampleAtElapsed, formatElapsed} from './elapsed.js';
 import 'leaflet/dist/leaflet.css';
 import './style.css';
 import {clampIndex} from './model.js';
@@ -14,7 +15,7 @@ app.innerHTML = `
   <details class="control-section" open><summary>Hazard</summary><input id="storm-search" type="search" aria-label="Find an event" placeholder="Name, year or ID"><div id="storm-list" aria-label="Event archive" aria-live="polite">Loading archive…</div><div class="archive-row"><span id="storm-list-status" role="status"></span></div><div id="selected-storms" aria-label="Selected events"></div><p id="active-storm" role="status"></p></details>
   <section class="exposure"><details class="control-section" open><summary>Exposure</summary><h2>Where homes are</h2><fieldset class="visual-options"><legend>Visualization options</legend><label><input id="tract-toggle" type="checkbox"> Housing tracts</label></fieldset><p id="tract-status" role="status"></p><button id="tract-retry" type="button" hidden>Retry loading data</button><details><summary>Find a tract</summary><label for="tract-search">Search Florida tract GEOID</label><input id="tract-search" type="search" inputmode="numeric" placeholder="Enter tract GEOID" disabled><div id="tract-results" aria-live="polite"></div><div id="tract-detail" aria-live="polite"></div></details></details><details class="control-section" open><summary>Cedents</summary><div class="market-heading"><h2>Fictional cedent market</h2><span class="help"><button type="button" aria-label="About modeled cedents" aria-describedby="market-help">?</button><span id="market-help" role="tooltip">Synthetic insurers share the Florida market.</span></span></div><div class="market-controls"><label for="market-seed">Seed</label><input id="market-seed" type="number" min="0" max="4294967295" step="1" value="42"><button id="market-generate" type="button" disabled>Generate</button><label for="market-view">View</label><select id="market-view"><option value="impact">Event impact</option><option value="concentration">Concentration</option><option value="overlap">Overlap</option></select></div><div id="market-legend" aria-live="polite"></div><p id="market-error" role="status"></p><p id="market-residual"></p><div id="cedent-list" aria-label="Select cedents"></div><p id="market-summary" aria-live="polite">Loading market…</p></details><details class="control-section" open><summary>Underwriting</summary><section class="xol"><h2>Junior XOL scenario</h2><p class="xol-caption">Active event</p><label for="xol-capital">Upfront capital ($)</label><input id="xol-capital" type="number" min="0" step="1000" value="1000000"><div class="xol-terms policy-terms"><label>Policy deductible (% of replacement value)<input id="xol-policy-deductible" type="number" min="0" max="100" step="1" value="2"></label><label>Policy limit (% of replacement value)<input id="xol-policy-limit" type="number" min="0" max="100" step="1" value="100"></label></div><div class="xol-terms"><label>Attachment (% of exposure)<input id="xol-attachment" type="number" min="0" max="100" step="1" value="2"></label><label>Limit (% of exposure)<input id="xol-limit" type="number" min="0" max="100" step="1" value="8"></label><label>Rate on line (%)<input id="xol-rate" type="number" min="0" step="1" value="10"></label></div><p>Capital is split equally; unused capital stays unallocated.</p><div id="xol-status" role="status"></div><div id="xol-results" aria-live="polite">Select cedents to model the event.</div><details><summary>How this works</summary><p>Wind damage uses present-day housing at $300,000 per unit. Policy terms apply before the XOL layer.</p><p>Investor loss is the funded share of ceded loss. Premium is principal × rate on line.</p></details></section></details></section></main>
   <div class="map-label"><span>HISTORICAL VIEW</span><b id="map-storm">No storm selected</b><small id="map-storm-detail">Select storms in Hazard</small></div>
-  <section class="timeline" aria-label="Storm timeline"><div class="timeline-head"><div><span class="overline">STORM TRACK</span><strong id="point-time">Loading track…</strong></div><div class="timeline-actions"><button id="play" aria-label="Play track">▶</button><span id="point-count"></span></div></div><input id="timeline" aria-label="Track point" type="range" min="0" value="0" step="0.001"><div class="timeline-foot"><span id="timeline-start"></span><span>ACTIVE STORM TRACK POINT · UTC</span><span id="timeline-end"></span></div></section>
+  <section class="timeline" aria-label="Storm timeline"><div class="timeline-head"><div><span class="overline">STORM TRACK</span><strong id="point-time">Loading track…</strong></div><div class="timeline-actions"><button id="play" aria-label="Play track">▶</button><span id="point-count"></span></div></div><input id="timeline" aria-label="Track point" type="range" min="0" value="0" step="0.001"><div class="timeline-foot"><span id="timeline-start"></span><span id="timeline-kind">ACTIVE STORM TRACK POINT · UTC</span><span id="timeline-end"></span></div></section>
   <div id="error" class="error" role="alert" hidden></div>`;
 
 const map = L.map('map', {zoomControl:false, minZoom:3}).setView([25.5,-81], 5);
@@ -23,9 +24,10 @@ L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19,attrib
 const $ = s => document.querySelector(s);
 const colors = {34:'#e3af58',50:'#eb845b',64:'#d85b52'};
 let index=0, points=[], marker, timer, stormFailed=false;
-let storms=[], activeId=null, activeStatus='loading';
+let storms=[], activeId=null, activeStatus='loading', autoDefaultId=null;
 const selectedStorms=new Set(), stormCache=new Map();
 let tracksPromise;
+let elapsed=0, groupDuration=0;
 const trackPalette=['#72e5e0','#f5c76b','#eaa8fa','#9fdc78','#ff9b9b','#91b9ff','#ffd4a0','#c4c4ff'];
 const stormColors=new Map();
 function trackColor(id){return stormColors.get(id)}
@@ -53,7 +55,7 @@ function loadStorm(s){
   if(tracks.status==='fulfilled' && Array.isArray(tracks.value[s.id]) && tracks.value[s.id].length) entry.raw=tracks.value[s.id]; else entry.trackError=true;
   if(swath.status==='fulfilled' && (!s.hasSwath || swath.value)) entry.swath=swath.value; else entry.swathError=true;
   entry.status='ready';
-  if(selectedStorms.has(s.id)) {renderStormLayers(s,entry);if(activeId===s.id)activateStorm(s.id);else renderSelected()}
+  if(selectedStorms.has(s.id)) {renderStormLayers(s,entry);if(activeId===s.id)activateStorm(s.id);else {renderSelected();refreshGroup()}}
  }); return entry;
 }
 function renderStormLayers(s,entry){
@@ -69,7 +71,7 @@ function renderStormLayers(s,entry){
  }));
  if(entry.swathLayer)entry.swathLayer.addTo(map); if(entry.track)entry.track.addTo(map);if(entry.observations)entry.observations.addTo(map);
 }
-function removeStormLayers(entry){if(activeObservation && entry?.observations?.hasLayer(activeObservation)){activeObservation.closeTooltip();activeObservation=null}map.closeTooltip(swathInfo);entry?.track?.remove();entry?.observations?.remove();entry?.swathLayer?.remove()}
+function removeStormLayers(entry){if(activeObservation && entry?.observations?.hasLayer(activeObservation)){activeObservation.closeTooltip();activeObservation=null}map.closeTooltip(swathInfo);entry?.track?.remove();entry?.observations?.remove();entry?.swathLayer?.remove();entry?.movingMarker?.remove()}
 const swathInfo=L.tooltip({direction:'top',offset:[0,-8],className:'swath-info'});
 let activeObservation=null;
 function showSwathInfo(e){
@@ -91,18 +93,52 @@ archiveMore.type='button';archiveMore.id='archive-more';archiveMore.textContent=
 $('.archive-row').prepend(archiveMore);
 function appendArchive(){
  const list=$('#storm-list'), start=archiveShown, fragment=document.createDocumentFragment();
- for(const s of archiveMatches.slice(start,start+80)) {const label=document.createElement('label'), input=document.createElement('input'), text=document.createElement('span');input.type='checkbox';input.checked=selectedStorms.has(s.id);text.textContent=`${s.name} · ${s.year} · ${s.id}`;label.append(input,text);fragment.append(label);input.addEventListener('change',()=>toggleStorm(s,input.checked));}
- list.append(fragment);archiveShown=Math.min(start+80,archiveMatches.length);
+ const visible=archiveMatches.slice(start,start+80);
+ for(const s of visible) {
+  let group=list.querySelector(`[data-year="${s.year}"]`) || fragment.querySelector(`[data-year="${s.year}"]`);
+  if(!group){
+   group=document.createElement('div');group.dataset.year=s.year;
+   const heading=document.createElement('label'), box=document.createElement('input');box.type='checkbox';box.setAttribute('aria-label',`Select all ${s.year} events`);box.className='year-checkbox';heading.append(box,document.createTextNode(String(s.year)));group.append(heading);fragment.append(group);
+   box.addEventListener('change',()=>toggleYear(s.year,box.checked));
+  }
+  const label=document.createElement('label'), input=document.createElement('input'), text=document.createElement('span');input.type='checkbox';input.checked=selectedStorms.has(s.id);input.dataset.stormId=s.id;text.textContent=`${s.name} · ${s.year} · ${s.id}`;label.append(input,text);group.append(label);input.addEventListener('change',()=>toggleStorm(s,input.checked));
+ }
+ list.append(fragment);archiveShown=Math.min(start+80,archiveMatches.length);syncArchive();
  const done=archiveShown>=archiveMatches.length, hadFocus=document.activeElement===archiveMore;
  archiveMore.hidden=done && !hadFocus;
  archiveMore.textContent=done?'All shown':'Show more';
  archiveMore.setAttribute('aria-disabled',String(done));
  $('#storm-list-status').textContent=archiveMatches.length?`${archiveShown} of ${archiveMatches.length}`:'No matches.';
 }
+function syncArchive(){
+ for(const box of $('#storm-list').querySelectorAll('[data-storm-id]'))box.checked=selectedStorms.has(box.dataset.stormId);
+ for(const group of $('#storm-list').querySelectorAll('[data-year]')){
+  const events=storms.filter(s=>String(s.year)===group.dataset.year), count=events.reduce((n,s)=>n+Number(selectedStorms.has(s.id)),0), box=group.querySelector('.year-checkbox');
+  box.checked=count===events.length;box.indeterminate=count>0 && count<events.length;
+ }
+}
+function toggleYear(year,on){
+ const events=storms.filter(s=>s.year===year);const wasGroup=selectedStorms.size>1;stop();
+ if(on && autoDefaultId && !events.some(s=>s.id===autoDefaultId)){
+  selectedStorms.delete(autoDefaultId);removeStormLayers(stormCache.get(autoDefaultId));
+ }
+ autoDefaultId=null;
+ for(const s of events){
+  if(on && !selectedStorms.has(s.id)){selectedStorms.add(s.id);loadStorm(s)}
+  else if(!on && selectedStorms.delete(s.id))removeStormLayers(stormCache.get(s.id));
+ }
+ if(!wasGroup && selectedStorms.size>1)elapsed=0;
+ assignTrackColors();
+ for(const s of events)if(on && stormCache.get(s.id)?.status==='ready')renderStormLayers(s,stormCache.get(s.id));
+ const next=selectedStorms.has(activeId)?activeId:(events.find(s=>selectedStorms.has(s.id))?.id || [...selectedStorms].at(-1) || null);
+ if(next!==activeId || selectedStorms.size<=1)activateStorm(next);else renderSelected();
+ if(activeId)$('#map-storm-detail').textContent=`${selectedStorms.size} selected · active event`;
+ syncArchive();refreshGroup();
+}
 archiveMore.addEventListener('click',()=>{if(archiveShown<archiveMatches.length)appendArchive()});
 function renderArchive(){
  const query=$('#storm-search').value.trim().toLowerCase();
- archiveMatches=storms.filter(s=>`${s.name} ${s.year} ${s.id} ${s.basin}`.toLowerCase().includes(query));
+ archiveMatches=storms.filter(s=>/^\d{4}$/.test(query)?String(s.year)===query:`${s.name} ${s.year} ${s.id} ${s.basin}`.toLowerCase().includes(query));
  archiveShown=0;$('#storm-list').replaceChildren();appendArchive();
 }
 function renderSelected(){
@@ -110,22 +146,25 @@ function renderSelected(){
  for(const id of selectedStorms){
   const s=storms.find(x=>x.id===id), entry=stormCache.get(id), chip=document.createElement('span'), b=document.createElement('button'), remove=document.createElement('button');
   chip.className='storm-chip';chip.style.setProperty('--track-color',trackColor(id));
-  b.type='button';b.className='storm-chip-select';b.textContent=`${stormName(s)} · ${s.id}`+(id===activeId?' · active':'');b.setAttribute('aria-pressed',String(id===activeId));b.addEventListener('click',()=>activateStorm(id));
+  b.type='button';b.className='storm-chip-select';b.textContent=`${stormName(s)} · ${s.id}`+(id===activeId?' · active':'');b.setAttribute('aria-pressed',String(id===activeId));b.addEventListener('click',()=>{autoDefaultId=null;activateStorm(id)});
   remove.type='button';remove.className='storm-chip-remove';remove.textContent='×';remove.setAttribute('aria-label',`Remove ${stormName(s)} · ${s.id}`);remove.addEventListener('click',()=>toggleStorm(s,false));
   chip.append(b,remove);
-  if(entry?.trackError || entry?.swathError){const status=document.createElement('span');status.className='storm-chip-error';status.textContent=entry.trackError && entry.swathError?'Track and swath unavailable':entry.trackError?'Track unavailable':'Swath unavailable';chip.append(status);const retry=document.createElement('button');retry.type='button';retry.textContent='Retry';retry.setAttribute('aria-label',`Retry data for ${stormName(s)} · ${s.id}`);retry.addEventListener('click',()=>{removeStormLayers(entry);stormCache.delete(id);if(entry.trackError)tracksPromise=null;loadStorm(s);if(activeId===id)activateStorm(id);else renderSelected()});chip.append(retry)}
+  if(entry?.trackError || entry?.swathError){const status=document.createElement('span');status.className='storm-chip-error';status.textContent=entry.trackError && entry.swathError?'Track and swath unavailable':entry.trackError?'Track unavailable':'Swath unavailable';chip.append(status);const retry=document.createElement('button');retry.type='button';retry.textContent='Retry';retry.setAttribute('aria-label',`Retry data for ${stormName(s)} · ${s.id}`);retry.addEventListener('click',()=>{stop();removeStormLayers(entry);stormCache.delete(id);if(entry.trackError)tracksPromise=null;loadStorm(s);if(activeId===id)activateStorm(id);else {renderSelected();refreshGroup()}});chip.append(retry)}
   list.append(chip);
  }
 }
 function toggleStorm(s,on){
- if(on){selectedStorms.add(s.id);assignTrackColors();const entry=loadStorm(s);if(entry.status==='ready')renderStormLayers(s,entry);activateStorm(s.id)}
+ autoDefaultId=null;
+ const wasGroup=selectedStorms.size>1;stop();
+ if(on){selectedStorms.add(s.id);if(!wasGroup && selectedStorms.size>1)elapsed=0;assignTrackColors();const entry=loadStorm(s);if(entry.status==='ready')renderStormLayers(s,entry);activateStorm(s.id)}
  else{selectedStorms.delete(s.id);assignTrackColors();removeStormLayers(stormCache.get(s.id));if(activeId===s.id)activateStorm([...selectedStorms].at(-1)||null)}
+ if(wasGroup && selectedStorms.size===1 && activeId!==s.id)activateStorm(activeId);
  renderSelected();
- for(const label of $('#storm-list').querySelectorAll('label')) if(label.textContent.includes(s.id)) label.querySelector('input').checked=on;
+ syncArchive();refreshGroup();
  if(activeId && activeId!==s.id) $('#map-storm-detail').textContent=`${selectedStorms.size} selected · active event`;
 }
 function activateStorm(id){
- stop();activeId=id;const s=storms.find(x=>x.id===id), entry=stormCache.get(id);window.stormSwath=null;points=[];index=0;
+ if(selectedStorms.size<=1)stop();activeId=id;const s=storms.find(x=>x.id===id), entry=stormCache.get(id);window.stormSwath=null;points=[];index=0;
  if(marker)marker.remove();
  activeStatus=!s?'none':!entry || entry.status==='loading'?'loading':entry.swathError?'error':!s.hasSwath?'unavailable':entry.swath?'ready':'error';
  stormFailed=activeStatus==='error';
@@ -139,7 +178,7 @@ function activateStorm(id){
  $('#timeline').disabled=points.length<2;$('#play').disabled=points.length<2;$('#timeline').max=Math.max(0,points.length-1);
  $('#timeline-start').textContent=points.length?String(entry.raw[0].time).slice(0,10):'';$('#timeline-end').textContent=points.length?String(entry.raw.at(-1).time).slice(0,10):'';
  if(points.length)selectPoint(0);else {$('#point-time').textContent=entry?.status==='ready'?'Track unavailable':s?'Loading track…':'Select a storm';$('#point-count').textContent=''}
- renderSelected();updateMarket();scheduleXol();
+ renderSelected();updateMarket();scheduleXol();refreshGroup();
 }
 const pointTime = p => Date.parse(p.time);
 function selectPoint(i) {
@@ -157,9 +196,41 @@ function selectPoint(i) {
     marker.getElement()?.querySelector('.storm-symbol')?.style.setProperty('--storm-hue',hue);
   }
 }
+function refreshGroup(){
+ const group=selectedStorms.size>1, slider=$('#timeline');
+ slider.setAttribute('aria-label',group?'Elapsed time':'Track point');$('#timeline-kind').textContent=group?'ELAPSED TIME':'ACTIVE STORM TRACK POINT · UTC';
+ if(!group){slider.step='0.001';for(const entry of stormCache.values())entry.movingMarker?.remove();return}
+ if(marker)marker.remove();
+ const entries=[...selectedStorms].map(id=>stormCache.get(id));
+ const pending=entries.some(e=>!e || e.status==='loading'), failed=entries.some(e=>e?.trackError);
+ groupDuration=Math.max(0,...entries.map(e=>e?.raw?.length?Date.parse(e.raw.at(-1).time)-Date.parse(e.raw[0].time):0));
+ slider.max=groupDuration;slider.step='1';slider.disabled=pending || failed || !groupDuration;$('#play').disabled=slider.disabled;
+ $('#timeline-start').textContent='Day 1 + 0h';$('#timeline-end').textContent=formatElapsed(groupDuration);
+ if(pending || failed){$('#point-time').textContent=pending?'Loading tracks…':'Track unavailable';$('#point-count').textContent='';for(const e of entries)e?.movingMarker?.remove();return}
+ drawGroup(Math.min(elapsed,groupDuration));
+}
+function drawGroup(value){
+ elapsed=Math.max(0,Math.min(value,groupDuration));$('#timeline').value=elapsed;$('#point-time').textContent=formatElapsed(elapsed);$('#point-count').textContent='';
+ for(const id of selectedStorms){
+  const entry=stormCache.get(id), track=entry?.unwrapped;if(!track?.length)continue;
+  const sample=sampleAtElapsed(track,elapsed);
+  if(!sample){entry.movingMarker?.remove();continue}
+  if(!entry.movingMarker)entry.movingMarker=L.marker(sample.coordinates,{interactive:false,icon:L.divIcon({className:'storm-marker',html:'<span class="storm-symbol"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="currentColor" d="M20 3C9 3 3 10 2 20c3-5 8-8 14-8-3 2-5 5-5 8 0 5 4 9 9 9 4 0 7-2 9-6 1 8-5 14-14 14 12 2 23-6 23-18C38 10 30 3 20 3Zm0 12a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg></span>',iconSize:[32,32],iconAnchor:[16,16]})});
+  entry.movingMarker.setLatLng(sample.coordinates);if(!map.hasLayer(entry.movingMarker))entry.movingMarker.addTo(map);
+  const element=entry.movingMarker.getElement();if(element){element.dataset.stormId=id;element.querySelector('.storm-symbol')?.style.setProperty('--storm-hue',Math.max(0,45-Math.max(0,(sample.wind??30)-30)*.38));}
+ }
+}
+function playGroup(){
+ if($('#play').disabled)return;
+ if(elapsed>=groupDuration)drawGroup(0);
+ $('#play').textContent='❚❚';$('#play').setAttribute('aria-label','Pause track');
+ const start=performance.now(), initial=elapsed;
+ function frame(now){drawGroup(Math.min(groupDuration,initial+(now-start)*3600000/60));if(elapsed>=groupDuration)stop();else timer=requestAnimationFrame(frame)}
+ timer=requestAnimationFrame(frame);
+}
 function stop() {if(timer)cancelAnimationFrame(timer);timer=null;$('#play').textContent='▶';$('#play').setAttribute('aria-label','Play track');}
 function play() {
-  if(timer){stop();return} if(index>=points.length-1)selectPoint(0);
+  if(timer){stop();return} if(selectedStorms.size>1){playGroup();return} if(index>=points.length-1)selectPoint(0);
   $('#play').textContent='❚❚';$('#play').setAttribute('aria-label','Pause track');
   const start=performance.now(), lo=Math.floor(index), fraction=index-lo;
   const initial=pointTime(points[lo].properties)+(pointTime(points[Math.min(lo+1,points.length-1)].properties)-pointTime(points[lo].properties))*fraction;
@@ -170,12 +241,12 @@ function play() {
   }
   timer=requestAnimationFrame(frame);
 }
-$('#timeline').addEventListener('input',e=>{stop();if(points.length)selectPoint(+e.target.value)});
+$('#timeline').addEventListener('input',e=>{stop();if(selectedStorms.size>1)drawGroup(+e.target.value);else if(points.length)selectPoint(+e.target.value)});
 $('#play').addEventListener('click',play);
 $('#storm-search').addEventListener('input',renderArchive);
 fetch(`${import.meta.env.BASE_URL}data/storms/catalog.json`).then(r=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json()}).then(data=>{
  storms=data.storms.slice().sort(compareStorms);renderArchive();
- const initial=defaultStorm(storms);if(initial)toggleStorm(initial,true);else activateStorm(null);
+ const initial=defaultStorm(storms);if(initial){toggleStorm(initial,true);autoDefaultId=initial.id}else activateStorm(null);
 }).catch(error=>{console.error(error);activateStorm(null);activeStatus='error';stormFailed=true;$('#storm-list').textContent='Storm archive unavailable. Reload to try again.';updateMarket();scheduleXol()});
 
 // Load the compact, local Census extract independently of map visibility. Canvas avoids

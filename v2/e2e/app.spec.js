@@ -480,14 +480,14 @@ test('a missing advertised swath offers retry rather than a zero-loss scenario',
 test('archive browses all storms in descending year order without losing focus', async ({page})=>{
  await page.goto('/v2/');
  const expected=await page.evaluate(async()=> (await (await fetch('/v2/data/storms/catalog.json')).json()).storms.length);
- await expect(page.locator('#storm-list input')).toHaveCount(80);
+ await expect(page.locator('#storm-list input[data-storm-id]')).toHaveCount(80);
  const more=page.getByRole('button',{name:/show more/i});
  await more.focus(); await page.keyboard.press('Enter');
- await expect(page.locator('#storm-list input')).toHaveCount(160);
+ await expect(page.locator('#storm-list input[data-storm-id]')).toHaveCount(160);
  await expect(more).toBeFocused();
  while(await more.count()) await more.click();
- await expect(page.locator('#storm-list input')).toHaveCount(expected);
- const years=await page.locator('#storm-list label').allTextContents();
+ await expect(page.locator('#storm-list input[data-storm-id]')).toHaveCount(expected);
+ const years=await page.locator('#storm-list label:has(input[data-storm-id])').allTextContents();
  const numbers=years.map(s=>Number(s.match(/ · (\d{4}) · /)[1]));
  expect(numbers.every((y,i)=>!i || numbers[i-1]>=y)).toBe(true);
  await expect(page.getByRole('button',{name:'All shown'})).toBeFocused();
