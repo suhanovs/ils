@@ -14,11 +14,13 @@ app.innerHTML = `
   <main class="panel"><h1>Historical events</h1>
   <details class="control-section" open><summary>Hazard</summary><input id="storm-search" type="search" aria-label="Find an event" placeholder="Name, year or ID"><div id="storm-list" aria-label="Event archive" aria-live="polite">Loading archive…</div><div class="archive-row"><span id="storm-list-status" role="status"></span></div><div id="selected-storms" aria-label="Selected events"></div><p id="active-storm" role="status"></p></details>
   <section class="exposure"><details class="control-section" open><summary>Exposure</summary><h2>Where homes are</h2><fieldset class="visual-options"><legend>Visualization options</legend><label><input id="tract-toggle" type="checkbox"> Housing tracts</label></fieldset><p id="tract-status" role="status"></p><button id="tract-retry" type="button" hidden>Retry loading data</button><details><summary>Find a tract</summary><label for="tract-search">Search Florida tract GEOID</label><input id="tract-search" type="search" inputmode="numeric" placeholder="Enter tract GEOID" disabled><div id="tract-results" aria-live="polite"></div><div id="tract-detail" aria-live="polite"></div></details></details><details class="control-section" open><summary>Cedents</summary><div class="market-heading"><h2>Fictional cedent market</h2><span class="help"><button type="button" aria-label="About modeled cedents" aria-describedby="market-help">?</button><span id="market-help" role="tooltip">Synthetic insurers share the Florida market.</span></span></div><div class="market-controls"><label for="market-seed">Seed</label><input id="market-seed" type="number" min="0" max="4294967295" step="1" value="42"><button id="market-generate" type="button" disabled>Generate</button><label for="market-view">View</label><select id="market-view"><option value="impact">Event impact</option><option value="concentration">Concentration</option><option value="overlap">Overlap</option></select></div><div id="market-legend" aria-live="polite"></div><p id="market-error" role="status"></p><p id="market-residual"></p><div id="cedent-list" aria-label="Select cedents"></div><p id="market-summary" aria-live="polite">Loading market…</p></details><details class="control-section" open><summary>Underwriting</summary><section class="xol"><h2>Junior XOL scenario</h2><p class="xol-caption">Active event</p><label for="xol-capital">Upfront capital ($)</label><input id="xol-capital" type="number" min="0" step="1000" value="1000000"><div class="xol-terms policy-terms"><label>Policy deductible (% of replacement value)<input id="xol-policy-deductible" type="number" min="0" max="100" step="1" value="2"></label><label>Policy limit (% of replacement value)<input id="xol-policy-limit" type="number" min="0" max="100" step="1" value="100"></label></div><div class="xol-terms"><label>Attachment (% of exposure)<input id="xol-attachment" type="number" min="0" max="100" step="1" value="2"></label><label>Limit (% of exposure)<input id="xol-limit" type="number" min="0" max="100" step="1" value="8"></label><label>Rate on line (%)<input id="xol-rate" type="number" min="0" step="1" value="10"></label></div><p>Capital is split equally; unused capital stays unallocated.</p><div id="xol-status" role="status"></div><div id="xol-results" aria-live="polite">Select cedents to model the event.</div><details><summary>How this works</summary><p>Wind damage uses present-day housing at $300,000 per unit. Policy terms apply before the XOL layer.</p><p>Investor loss is the funded share of ceded loss. Premium is principal × rate on line.</p></details></section></details></section></main>
-  <div class="map-label"><span>HISTORICAL VIEW</span><b id="map-storm">No storm selected</b><small id="map-storm-detail">Select storms in Hazard</small></div>
   <section class="timeline" aria-label="Storm timeline"><div class="timeline-head"><div><span class="overline">STORM TRACK</span><strong id="point-time">Loading track…</strong></div><div class="timeline-actions"><button id="play" aria-label="Play track">▶</button><span id="point-count"></span></div></div><input id="timeline" aria-label="Track point" type="range" min="0" value="0" step="0.001"><div class="timeline-foot"><span id="timeline-start"></span><span id="timeline-kind">ACTIVE STORM TRACK POINT · UTC</span><span id="timeline-end"></span></div></section>
   <div id="error" class="error" role="alert" hidden></div>`;
 
 const map = L.map('map', {zoomControl:false, minZoom:3}).setView([25.5,-81], 5);
+map.attributionControl.setPrefix(false);
+// Leaflet's default marker update rounds to whole pixels; retain projection precision.
+const SmoothMarker=L.Marker.extend({update(){if(this._icon && this._map)this._setPos(this._map.project(this._latlng).subtract(this._map.getPixelOrigin()));return this}});
 L.control.zoom({position:'bottomright'}).addTo(map);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'}).addTo(map);
 const $ = s => document.querySelector(s);
@@ -132,7 +134,6 @@ function toggleYear(year,on){
  for(const s of events)if(on && stormCache.get(s.id)?.status==='ready')renderStormLayers(s,stormCache.get(s.id));
  const next=selectedStorms.has(activeId)?activeId:(events.find(s=>selectedStorms.has(s.id))?.id || [...selectedStorms].at(-1) || null);
  if(next!==activeId || selectedStorms.size<=1)activateStorm(next);else renderSelected();
- if(activeId)$('#map-storm-detail').textContent=`${selectedStorms.size} selected · active event`;
  syncArchive();refreshGroup();
 }
 archiveMore.addEventListener('click',()=>{if(archiveShown<archiveMatches.length)appendArchive()});
@@ -161,7 +162,6 @@ function toggleStorm(s,on){
  if(wasGroup && selectedStorms.size===1 && activeId!==s.id)activateStorm(activeId);
  renderSelected();
  syncArchive();refreshGroup();
- if(activeId && activeId!==s.id) $('#map-storm-detail').textContent=`${selectedStorms.size} selected · active event`;
 }
 function activateStorm(id){
  if(selectedStorms.size<=1)stop();activeId=id;const s=storms.find(x=>x.id===id), entry=stormCache.get(id);window.stormSwath=null;points=[];index=0;
@@ -169,7 +169,6 @@ function activateStorm(id){
  activeStatus=!s?'none':!entry || entry.status==='loading'?'loading':entry.swathError?'error':!s.hasSwath?'unavailable':entry.swath?'ready':'error';
  stormFailed=activeStatus==='error';
  $('#active-storm').textContent=s?[s.trackSource?.includes('preliminary')?'Preliminary track':'',activeStatus==='unavailable'?'Wind footprint unavailable':activeStatus==='error'?'Event data unavailable':''].filter(Boolean).join(' · '):'';
- $('#map-storm').textContent=s?stormName(s):'No storm selected';$('#map-storm-detail').textContent=s?`${selectedStorms.size} selected · active event`:'Select storms in Hazard';
  $('.xol-caption').textContent=s?`Active event: ${stormName(s)}`:'Select an active event';
  if(entry?.status==='ready'){
   window.stormSwath=entry.swath || null;
@@ -191,14 +190,14 @@ function selectPoint(i) {
   const coords=[lerp(f.geometry.coordinates[1],next.geometry.coordinates[1]),lerp(f.geometry.coordinates[0],next.geometry.coordinates[0])];
   const hue=Math.max(0,45-Math.max(0,(intensity??30)-30)*.38);
   {
-    if(!marker) marker=L.marker(coords,{interactive:false,icon:L.divIcon({className:'storm-marker',html:'<span class="storm-symbol"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="currentColor" d="M20 3C9 3 3 10 2 20c3-5 8-8 14-8-3 2-5 5-5 8 0 5 4 9 9 9 4 0 7-2 9-6 1 8-5 14-14 14 12 2 23-6 23-18C38 10 30 3 20 3Zm0 12a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg></span>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(map);
+    if(!marker) marker=new SmoothMarker(coords,{interactive:false,icon:L.divIcon({className:'storm-marker',html:'<span class="storm-symbol"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="currentColor" d="M20 3C9 3 3 10 2 20c3-5 8-8 14-8-3 2-5 5-5 8 0 5 4 9 9 9 4 0 7-2 9-6 1 8-5 14-14 14 12 2 23-6 23-18C38 10 30 3 20 3Zm0 12a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg></span>',iconSize:[32,32],iconAnchor:[16,16]})}).addTo(map);
     else {marker.setLatLng(coords);if(!map.hasLayer(marker))marker.addTo(map)}
     marker.getElement()?.querySelector('.storm-symbol')?.style.setProperty('--storm-hue',hue);
   }
 }
 function refreshGroup(){
  const group=selectedStorms.size>1, slider=$('#timeline');
- slider.setAttribute('aria-label',group?'Elapsed time':'Track point');$('#timeline-kind').textContent=group?'ELAPSED TIME':'ACTIVE STORM TRACK POINT · UTC';
+ slider.setAttribute('aria-label',group?'Elapsed time':'Track point');$('#timeline-kind').textContent=group?'SYNCED PROGRESS':'ACTIVE STORM TRACK POINT · UTC';
  if(!group){slider.step='0.001';for(const entry of stormCache.values())entry.movingMarker?.remove();return}
  if(marker)marker.remove();
  const entries=[...selectedStorms].map(id=>stormCache.get(id));
@@ -213,9 +212,10 @@ function drawGroup(value){
  elapsed=Math.max(0,Math.min(value,groupDuration));$('#timeline').value=elapsed;$('#point-time').textContent=formatElapsed(elapsed);$('#point-count').textContent='';
  for(const id of selectedStorms){
   const entry=stormCache.get(id), track=entry?.unwrapped;if(!track?.length)continue;
-  const sample=sampleAtElapsed(track,elapsed);
+  const duration=Date.parse(track.at(-1).time)-Date.parse(track[0].time);
+  const sample=sampleAtElapsed(track,elapsed/groupDuration*duration);
   if(!sample){entry.movingMarker?.remove();continue}
-  if(!entry.movingMarker)entry.movingMarker=L.marker(sample.coordinates,{interactive:false,icon:L.divIcon({className:'storm-marker',html:'<span class="storm-symbol"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="currentColor" d="M20 3C9 3 3 10 2 20c3-5 8-8 14-8-3 2-5 5-5 8 0 5 4 9 9 9 4 0 7-2 9-6 1 8-5 14-14 14 12 2 23-6 23-18C38 10 30 3 20 3Zm0 12a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg></span>',iconSize:[32,32],iconAnchor:[16,16]})});
+  if(!entry.movingMarker)entry.movingMarker=new SmoothMarker(sample.coordinates,{interactive:false,icon:L.divIcon({className:'storm-marker',html:'<span class="storm-symbol"><svg viewBox="0 0 40 40" aria-hidden="true"><path fill="currentColor" d="M20 3C9 3 3 10 2 20c3-5 8-8 14-8-3 2-5 5-5 8 0 5 4 9 9 9 4 0 7-2 9-6 1 8-5 14-14 14 12 2 23-6 23-18C38 10 30 3 20 3Zm0 12a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z" fill-rule="evenodd"/></svg></span>',iconSize:[32,32],iconAnchor:[16,16]})});
   entry.movingMarker.setLatLng(sample.coordinates);if(!map.hasLayer(entry.movingMarker))entry.movingMarker.addTo(map);
   const element=entry.movingMarker.getElement();if(element){element.dataset.stormId=id;element.querySelector('.storm-symbol')?.style.setProperty('--storm-hue',Math.max(0,45-Math.max(0,(sample.wind??30)-30)*.38));}
  }
@@ -224,18 +224,18 @@ function playGroup(){
  if($('#play').disabled)return;
  if(elapsed>=groupDuration)drawGroup(0);
  $('#play').textContent='❚❚';$('#play').setAttribute('aria-label','Pause track');
- const start=performance.now(), initial=elapsed;
- function frame(now){drawGroup(Math.min(groupDuration,initial+(now-start)*3600000/60));if(elapsed>=groupDuration)stop();else timer=requestAnimationFrame(frame)}
+ let previous=performance.now(), progress=elapsed;
+ function frame(now){progress+=Math.max(0,Math.min(50,now-previous))*3600000/60;previous=now;drawGroup(Math.min(groupDuration,progress));if(elapsed>=groupDuration)stop();else timer=requestAnimationFrame(frame)}
  timer=requestAnimationFrame(frame);
 }
 function stop() {if(timer)cancelAnimationFrame(timer);timer=null;$('#play').textContent='▶';$('#play').setAttribute('aria-label','Play track');}
 function play() {
   if(timer){stop();return} if(selectedStorms.size>1){playGroup();return} if(index>=points.length-1)selectPoint(0);
   $('#play').textContent='❚❚';$('#play').setAttribute('aria-label','Pause track');
-  const start=performance.now(), lo=Math.floor(index), fraction=index-lo;
-  const initial=pointTime(points[lo].properties)+(pointTime(points[Math.min(lo+1,points.length-1)].properties)-pointTime(points[lo].properties))*fraction;
+  let previous=performance.now();const lo=Math.floor(index), fraction=index-lo;
+  let current=pointTime(points[lo].properties)+(pointTime(points[Math.min(lo+1,points.length-1)].properties)-pointTime(points[lo].properties))*fraction;
   const end=pointTime(points.at(-1).properties);
-  function frame(now){const current=Math.min(end,initial+(now-start)*3600000/60);let i=0;while(i<points.length-2 && pointTime(points[i+1].properties)<current)i++;
+  function frame(now){current=Math.min(end,current+Math.max(0,Math.min(50,now-previous))*3600000/60);previous=now;let i=0;while(i<points.length-2 && pointTime(points[i+1].properties)<current)i++;
     const from=pointTime(points[i].properties), to=pointTime(points[i+1].properties);selectPoint(i+(current-from)/(to-from));
     if(current>=end)stop();else timer=requestAnimationFrame(frame);
   }

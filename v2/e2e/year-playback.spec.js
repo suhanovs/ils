@@ -21,7 +21,7 @@ test('year search is exact, selecting it replaces only the untouched default',as
  await expect(page.getByRole('checkbox',{name:'Select all 2021 events'})).toHaveCount(0);
  await page.getByRole('checkbox',{name:'Select all 2020 events'}).check();
  await expect(page.locator('.storm-chip')).toHaveCount(30);
- await expect(page.locator('#map-storm-detail')).toContainText('30 selected');
+ await expect(page.locator('.map-label')).toHaveCount(0);
 });
 
 test('year selection preserves a manually chosen event from another year',async ({page})=>{
@@ -32,7 +32,7 @@ test('year selection preserves a manually chosen event from another year',async 
  await page.getByRole('checkbox',{name:'Select all 2020 events'}).check();
  await expect(page.locator('#selected-storms')).toContainText('AL092022');
  await expect(page.locator('.storm-chip')).toHaveCount(32);
- await expect(page.locator('#map-storm-detail')).toContainText('32 selected');
+ await expect(page.locator('.map-label')).toHaveCount(0);
 });
 
 test('different calendar dates and advisory intervals advance together by elapsed time',async ({page})=>{
@@ -50,14 +50,18 @@ test('different calendar dates and advisory intervals advance together by elapse
  await slider.fill(String(3*3600000));
  const after=await alpha.boundingBox(), afterBeta=await beta.boundingBox(), betaHue=await beta.locator('.storm-symbol').evaluate(e=>e.style.getPropertyValue('--storm-hue'));
  expect(after.x).not.toBe(before.x);expect(after.y).not.toBe(before.y);
- expect(Math.abs((after.x-before.x)-(afterBeta.x-beforeBeta.x))).toBeLessThan(2);
+ expect((after.x-before.x)/(afterBeta.x-beforeBeta.x)).toBeCloseTo(2, 0);
  expect(await alpha.locator('.storm-symbol').evaluate(e=>e.style.getPropertyValue('--storm-hue'))).not.toBe(initialHue);
- expect(betaHue).not.toBe(initialHue);
+ expect(Number(betaHue)).toBeCloseTo(39.3, 2);
+ expect(Number(await alpha.locator('.storm-symbol').evaluate(e=>e.style.getPropertyValue('--storm-hue')))).toBeCloseTo(22.2,2);
  expect(betaHue).not.toBe(await alpha.locator('.storm-symbol').evaluate(e=>e.style.getPropertyValue('--storm-hue')));
- await slider.fill(String(7*3600000));await expect(beta).toHaveCount(0);await expect(alpha).toHaveCount(1);
+ await slider.fill(String(7*3600000));await expect(beta).toHaveCount(1);await expect(alpha).toHaveCount(1);
+ await slider.fill(String(12*3600000));await expect(beta).toHaveCount(1);await expect(alpha).toHaveCount(1);
+ const endAlpha=await alpha.boundingBox(),endBeta=await beta.boundingBox();
+ expect((endAlpha.x-before.x)/(endBeta.x-beforeBeta.x)).toBeCloseTo(2,1);
 });
 
-test('year playback uses longest elapsed track and hides finished events', async ({page})=>{
+test('year playback uses longest elapsed track and retains all events', async ({page})=>{
  await page.goto('/v2/');
  await page.getByLabel('Find an event').fill('2026');
  await page.getByRole('checkbox',{name:'Select all 2026 events'}).check();
@@ -68,7 +72,7 @@ test('year playback uses longest elapsed track and hides finished events', async
  await expect(page.locator('#point-time')).toContainText('Day 1 + 0h');
  await expect(page.locator('.storm-marker')).toHaveCount(10);
  await slider.fill(String(25*3600000));
- await expect(page.locator('.storm-marker')).toHaveCount(9);
+ await expect(page.locator('.storm-marker')).toHaveCount(10);
  await page.getByRole('button',{name:'Play track'}).click();
  await expect.poll(async()=>Number(await slider.inputValue())).toBeGreaterThan(25*3600000);
 });
@@ -108,7 +112,7 @@ test('mobile year selection is tri-state and labels the elapsed timeline', async
  await year.focus();await page.keyboard.press('Space');
  await expect(year).toBeChecked();
  await expect(page.getByRole('slider',{name:'Elapsed time'})).toBeEnabled();
- await expect(page.locator('.timeline-foot')).toContainText('ELAPSED TIME');
+ await expect(page.locator('.timeline-foot')).toContainText('SYNCED PROGRESS');
  expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 });
 
@@ -170,4 +174,60 @@ test('archive visually nests events under their year',async ({page})=>{
  const child=page.locator('#storm-list [data-storm-id]').first();
  const [a,b]=await Promise.all([parent.boundingBox(),child.boundingBox()]);
  expect(b.x).toBeGreaterThan(a.x);
+});
+
+
+test('map removes the Leaflet flag and retains OpenStreetMap attribution',async ({page})=>{
+ await page.goto('/v2/');
+ await expect(page.locator('.map-label')).toHaveCount(0);
+ await expect(page.locator('.leaflet-control-attribution')).toContainText('OpenStreetMap');
+ await expect(page.locator('.leaflet-control-attribution svg')).toHaveCount(0);
+});
+
+test('group markers move at subpixel precision across fine scrub increments',async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ const storms=[1,2].map(i=>({id:`AL0${i}2024`,name:`Storm${i}`,year:2024,basin:'AL',hasSwath:false}));
+ const tracks=Object.fromEntries(storms.map((s,i)=>[s.id,[{time:'2024-01-01T00:00Z',lat:20+i,lon:-70,wind:40},{time:'2024-01-01T06:00Z',lat:21+i,lon:-69,wind:80}]]));
+ await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms}}));
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify(tracks))}));
+ await page.goto('/v2/');await page.getByRole('checkbox',{name:'Select all 2024 events'}).check();
+ const slider=page.getByRole('slider',{name:'Elapsed time'});await expect(slider).toBeEnabled();
+ const marker=page.locator('.storm-marker[data-storm-id="AL012024"]');
+ const xs=[];for(let i=0;i<8;i++){await slider.fill(String(i*60000));xs.push((await marker.boundingBox()).x)}
+ for(let i=1;i<xs.length;i++)expect(xs[i]).toBeGreaterThan(xs[i-1]);
+});
+
+
+test('real playback renders fractional positions and resumes after pause and zoom',async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ const storms=[1,2].map(i=>({id:`AL0${i}2024`,name:`Storm${i}`,year:2024,basin:'AL',hasSwath:false}));
+ const tracks=Object.fromEntries(storms.map((s,i)=>[s.id,[{time:'2024-01-01T00:00Z',lat:20+i,lon:-70,wind:40},{time:'2024-01-03T12:00Z',lat:21+i,lon:-69,wind:80}]]));
+ await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms}}));
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify(tracks))}));
+ await page.goto('/v2/');await expect(page.getByRole('button',{name:'Play track'})).toBeEnabled();
+ async function sample(){return page.evaluate(()=>new Promise(resolve=>{const xs=[];function frame(){const m=document.querySelector('.storm-marker');xs.push(m.getBoundingClientRect().x);if(xs.length<20)requestAnimationFrame(frame);else resolve(xs)}requestAnimationFrame(frame)}))}
+ await page.getByRole('button',{name:'Play track'}).click();let xs=await sample();expect(new Set(xs).size).toBeGreaterThan(10);expect(xs.some(x=>x%1!==0)).toBeTruthy();
+ await page.getByRole('button',{name:'Pause track'}).click();const paused=await page.getByRole('slider',{name:'Track point'}).inputValue();await page.waitForTimeout(100);expect(await page.getByRole('slider',{name:'Track point'}).inputValue()).toBe(paused);
+ await page.getByRole('checkbox',{name:'Select all 2024 events'}).check();await expect(page.getByRole('slider',{name:'Elapsed time'})).toBeEnabled();
+ await page.getByRole('button',{name:'Zoom in'}).click();await page.getByRole('button',{name:'Play track'}).click();xs=await sample();expect(new Set(xs).size).toBeGreaterThan(10);expect(xs.some(x=>x%1!==0)).toBeTruthy();
+ await page.getByRole('button',{name:'Pause track'}).click();const slider=page.getByRole('slider',{name:'Elapsed time'});await slider.fill(await slider.getAttribute('max'));await page.getByRole('button',{name:'Play track'}).click();await expect.poll(async()=>Number(await slider.inputValue())).toBeLessThan(Number(await slider.getAttribute('max'))/2);
+});
+
+for(const group of [false,true]) test(`${group?'group':'single'} playback does not jump forward after a long frame stall`,async ({page})=>{
+ const {gzipSync}=await import('node:zlib');
+ const storms=[1,2].map(i=>({id:`AL0${i}2024`,name:`Storm${i}`,year:2024,basin:'AL',hasSwath:false}));
+ const tracks=Object.fromEntries(storms.map((s,i)=>[s.id,[{time:'2024-01-01T00:00Z',lat:20+i,lon:-70,wind:40},{time:'2024-01-03T12:00Z',lat:21+i,lon:-69,wind:80}]]));
+ await page.route('**/data/storms/catalog.json',r=>r.fulfill({json:{storms}}));
+ await page.route('**/data/storms/tracks.bin',r=>r.fulfill({body:gzipSync(JSON.stringify(tracks))}));
+ await page.goto('/v2/');if(group)await page.getByRole('checkbox',{name:'Select all 2024 events'}).check();
+ await expect(page.getByRole('slider',{name:group?'Elapsed time':'Track point'})).toBeEnabled();
+ await page.getByRole('button',{name:'Play track'}).click();
+ const delta=await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>{
+  const slider=document.querySelector('#timeline'),group=slider.getAttribute('aria-label')==='Elapsed time';
+  const before=Number(slider.value),until=performance.now()+500;
+  while(performance.now()<until){};
+  requestAnimationFrame(()=>resolve({delta:Number(slider.value)-before,group}));
+ })));
+ expect(delta.delta).toBeGreaterThan(0);
+ expect(delta.delta).toBeLessThan(delta.group?2*3600000:2/60);
 });
