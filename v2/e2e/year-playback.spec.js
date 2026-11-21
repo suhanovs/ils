@@ -271,6 +271,17 @@ for(const group of [false,true]) test(`${group?'group':'single'} irregular obser
 });
 
 
+test('playback controls stay disabled until a track is loaded',async ({page})=>{
+ let release;const gate=new Promise(resolve=>release=resolve);
+ await page.route('**/data/storms/catalog.json',async route=>{await gate;await route.continue()});
+ await page.goto('/v2/',{waitUntil:'domcontentloaded'});
+ try{
+  await expect(page.getByRole('button',{name:'Play track'})).toBeDisabled();
+  await expect(page.locator('#timeline')).toBeDisabled();
+ } finally {release()}
+ await expect(page.getByRole('button',{name:'Play track'})).toBeEnabled();
+});
+
 test('duplicate advisories remain individually scrubbable and resume without a position jump',async ({page})=>{
  const {gzipSync}=await import('node:zlib');
  const storms=[{id:'AL012024',name:'Duplicate',year:2024,basin:'AL',hasSwath:false}];
